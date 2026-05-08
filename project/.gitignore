@@ -1,0 +1,14 @@
+# IDE generated files
+.idea/
+*.iml
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.py[cod]
+*$py.class
+.env
+
+# Data
+*.csv
