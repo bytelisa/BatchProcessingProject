@@ -20,6 +20,8 @@ services:
       SERVICE_PRECONDITION: "namenode:9870"
     env_file:
       - hadoop.env
+    ports:
+      - "9864:9864"
     volumes:
       - datanode_data:/hadoop/dfs/data
     depends_on:
@@ -50,17 +52,15 @@ services:
       - ./results:/opt/results
 
   nifi:
-    image: apache/nifi:2.4.0
+    image: apache/nifi:1.23.2    # ← era 2.4.0
     hostname: nifi
     ports:
-      - "8443:8443"
+      - "9090:9090"             # ← in 1.x è HTTP non HTTPS
     environment:
-      - NIFI_WEB_HTTPS_PORT=8443
-      - SINGLE_USER_CREDENTIALS_USERNAME=admin
-      - SINGLE_USER_CREDENTIALS_PASSWORD=adminpassword123
+      - NIFI_WEB_HTTP_PORT=9090  # ← cambia da HTTPS a HTTP
     volumes:
       - nifi_data:/opt/nifi/nifi-current/data
-      - /root/data/flights:/opt/nifi/input   # ← path assoluto ai CSV sul tuo WSL
+      - /root/data/flights:/opt/nifi/input
     depends_on:
       - namenode
       - datanode
