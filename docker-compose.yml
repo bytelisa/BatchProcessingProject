@@ -52,7 +52,7 @@ services:
       - ./results:/opt/results
 
   nifi:
-    image: apache/nifi:1.23.2    # ← era 2.4.0
+    image: apache/nifi:1.23.2    # ← compatibile con HDFS, prima era 2.4.0
     hostname: nifi
     ports:
       - "9090:9090"             # ← in 1.x è HTTP non HTTPS
@@ -61,6 +61,7 @@ services:
     volumes:
       - nifi_data:/opt/nifi/nifi-current/data
       - /root/data/flights:/opt/nifi/input
+      - ./nifi/hadoop-conf:/opt/nifi/hadoop-conf:ro
     depends_on:
       - namenode
       - datanode
