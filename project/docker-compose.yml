@@ -1,0 +1,86 @@
+services:
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    hostname: namenode
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    environment:
+      - CLUSTER_NAME=sabd-cluster
+    env_file:
+      - hadoop.env
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    hostname: datanode
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file:
+      - hadoop.env
+    volumes:
+      - datanode_data:/hadoop/dfs/data
+    depends_on:
+      - namenode
+
+  spark-master:
+    image: apache/spark:3.5.3
+    hostname: spark-master
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./src:/opt/scripts        # ← src è nella stessa cartella del docker-compose
+      - ./results:/opt/results
+
+  spark-worker:
+    image: apache/spark:3.5.3
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    depends_on:
+      - spark-master
+    volumes:
+      - ./src:/opt/scripts
+      - ./results:/opt/results
+
+  nifi:
+    image: apache/nifi:2.4.0
+    hostname: nifi
+    ports:
+      - "8443:8443"
+    environment:
+      - NIFI_WEB_HTTPS_PORT=8443
+      - SINGLE_USER_CREDENTIALS_USERNAME=admin
+      - SINGLE_USER_CREDENTIALS_PASSWORD=adminpassword123
+    volumes:
+      - nifi_data:/opt/nifi/nifi-current/data
+      - /root/data/flights:/opt/nifi/input   # ← path assoluto ai CSV sul tuo WSL
+    depends_on:
+      - namenode
+      - datanode
+
+  redis:
+    image: redis:7.2
+    ports:
+      - "6379:6379"
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  namenode_data:
+  datanode_data:
+  nifi_data:
+  grafana_data:
