@@ -5,6 +5,7 @@ A project by Valentina Jin and Elisa Marzioli.
 
 ```bash
 docker-compose up -d
+docker-compose up -d namenode datanode nifi # per vale (solo nodi nifi e hadoop)
 ```
 
 ## 2. Initialize HDFS directories and permits for NiFi
@@ -34,5 +35,19 @@ docker compose exec namenode hdfs dfs -chmod -R 777 /data/processed
 ## 3. Open NiFi web UI
 ```bash
 http://localhost:9090/nifi/
+```
+
+## 4. Spark
+Attivo due nodi Spark
+```bash
+docker compose up -d spark-master spark-worker # per vale 
+docker compose ps # per verificare se sono pronti
+```
+
+Comando per avviare utilis.py
+```bash
+docker compose exec spark-master /opt/spark/bin/spark-submit \
+  --master spark://spark-master:7077 \
+  /opt/scripts/utils.py
 ```
 

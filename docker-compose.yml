@@ -59,7 +59,8 @@ services:
     environment:
       - NIFI_WEB_HTTP_PORT=9090  # ← cambia da HTTPS a HTTP
     volumes:
-      - nifi_data:/opt/nifi/nifi-current/data
+      - /root/nifi/data:/opt/nifi/nifi-current/data
+      - /root/nifi/conf:/opt/nifi/nifi-current/conf
       - /root/data/flights:/opt/nifi/input
       - ./nifi/hadoop-conf:/opt/nifi/hadoop-conf:ro
     depends_on:
