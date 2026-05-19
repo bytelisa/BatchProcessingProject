@@ -7,10 +7,15 @@ A project by Valentina Jin and Elisa Marzioli.
 docker-compose up -d
 ```
 
-## 2. Initialize HDFS permits
+## 2. Initialize HDFS directories and permits for NiFi
+todo: automatizzare questi step con Docker compose!!
+
 ```bash
 
 docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights
+docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights/archive
+docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights/csv
+docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights/parquet
 ```
 
 ```bash
@@ -19,6 +24,11 @@ docker compose exec namenode hdfs dfs -chown -R nifi:supergroup /data/raw/flight
 
 ```bash
 docker compose exec namenode hdfs dfs -chmod -R 755 /data/raw/flights
+```
+And for Spark as well:
+```bash
+docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights
+docker compose exec namenode hdfs dfs -chmod -R 777 /data/processed
 ```
 
 ## 3. Open NiFi web UI
