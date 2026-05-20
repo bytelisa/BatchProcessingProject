@@ -1,6 +1,11 @@
 # Batch Processing Project - American Flights Analysis
-A project by Valentina Jin and Elisa Marzioli.
+Un progetto di Valentina Jin ed Elisa Marzioli.
 
+Requisiti:
+- Docker
+- Docker Compose
+
+Avvio dei container:
 ## 1. Launch the containers
 
 ```bash
