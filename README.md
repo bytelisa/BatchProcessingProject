@@ -50,4 +50,8 @@ docker compose exec spark-master /opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \
   /opt/scripts/utils.py
 ```
+oppure
+```bash
+./run.sh utils.py
+```
 

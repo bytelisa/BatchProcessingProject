@@ -40,42 +40,43 @@ def get_spark_session(app_name: str) -> SparkSession:
 # Schema esplicito (più veloce di inferSchema)
 # ─────────────────────────────────────────────
 
-FLIGHT_SCHEMA = StructType([
-    StructField("YEAR",                IntegerType(), True),
-    StructField("MONTH",               IntegerType(), True),
-    StructField("DAY_OF_MONTH",        IntegerType(), True),
-    StructField("OP_UNIQUE_CARRIER",   StringType(),  True),
-    StructField("ORIGIN_AIRPORT_ID",   IntegerType(), True),
-    StructField("DEST_AIRPORT_ID",     IntegerType(), True),
-    StructField("CRS_DEP_TIME",        IntegerType(), True),   # es. 830 = 08:30
-    StructField("DEP_DELAY",           FloatType(),   True),
-    StructField("ARR_DELAY",           FloatType(),   True),
-    StructField("CANCELLED",           FloatType(),   True),   # 1.0 = cancellato
-    StructField("DIVERTED",            FloatType(),   True),   # 1.0 = deviato
-    StructField("CARRIER_DELAY",       FloatType(),   True),
-    StructField("WEATHER_DELAY",       FloatType(),   True),
-    StructField("NAS_DELAY",           FloatType(),   True),
-    StructField("SECURITY_DELAY",      FloatType(),   True),
-    StructField("LATE_AIRCRAFT_DELAY", FloatType(),   True),
-])
+FLIGHT_SCHEMA = None  # non serve più
 
 # ─────────────────────────────────────────────
 # Caricamento dati
 # ─────────────────────────────────────────────
 
-def load_flights(spark: SparkSession):
+def load_flights(spark):
     """
-    Carica tutti e 4 i CSV mensili da HDFS in un unico DataFrame.
-    Usa lo schema esplicito per evitare il costoso inferSchema.
+    Carica i CSV usando i nomi delle colonne dall'header.
+    Più robusto dello schema fisso quando ci sono colonne extra.
     """
     df = (
         spark.read
         .option("header", "true")
-        .option("nullValue", "")          # celle vuote → null
-        .option("nanValue", "NA")         # valori NA → null
-        .schema(FLIGHT_SCHEMA)
+        .option("nullValue", "")
         .csv(HDFS_CSV_PATH)
     )
+
+    # Casta solo le colonne che servono al progetto
+    from pyspark.sql import functions as F
+    from pyspark.sql.types import IntegerType, FloatType
+
+    df = df \
+        .withColumn("YEAR",                F.col("YEAR").cast(IntegerType())) \
+        .withColumn("MONTH",               F.col("MONTH").cast(IntegerType())) \
+        .withColumn("DAY_OF_MONTH",        F.col("DAY_OF_MONTH").cast(IntegerType())) \
+        .withColumn("CRS_DEP_TIME",        F.col("CRS_DEP_TIME").cast(IntegerType())) \
+        .withColumn("DEP_DELAY",           F.col("DEP_DELAY").cast(FloatType())) \
+        .withColumn("ARR_DELAY",           F.col("ARR_DELAY").cast(FloatType())) \
+        .withColumn("CANCELLED",           F.col("CANCELLED").cast(FloatType())) \
+        .withColumn("DIVERTED",            F.col("DIVERTED").cast(FloatType())) \
+        .withColumn("CARRIER_DELAY",       F.col("CARRIER_DELAY").cast(FloatType())) \
+        .withColumn("WEATHER_DELAY",       F.col("WEATHER_DELAY").cast(FloatType())) \
+        .withColumn("NAS_DELAY",           F.col("NAS_DELAY").cast(FloatType())) \
+        .withColumn("SECURITY_DELAY",      F.col("SECURITY_DELAY").cast(FloatType())) \
+        .withColumn("LATE_AIRCRAFT_DELAY", F.col("LATE_AIRCRAFT_DELAY").cast(FloatType()))
+
     return df
 
 def add_hour_column(df):
