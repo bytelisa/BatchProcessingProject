@@ -5,7 +5,7 @@ A project by Valentina Jin and Elisa Marzioli.
 
 ```bash
 docker-compose up -d
-docker-compose up -d namenode datanode nifi # per vale (solo nodi nifi e hadoop)
+docker-compose up -d namenode datanode nifi airflow # per vale (solo nodi nifi, hadoop, airflow)
 ```
 
 ## 2. Initialize HDFS directories and permits for NiFi

@@ -72,6 +72,27 @@ services:
     ports:
       - "6379:6379"
 
+
+  airflow:
+    image: apache/airflow:2.9.0
+    hostname: airflow
+    ports:
+      - "8081:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/start.sh:/opt/airflow/start.sh
+      - /var/run/docker.sock:/var/run/docker.sock
+      - airflow_data:/opt/airflow
+    depends_on:
+      - namenode
+      - spark-master
+      - nifi
+    command: bash /opt/airflow/start.sh
+
   grafana:
     image: grafana/grafana:10.4.0
     ports:
@@ -85,4 +106,5 @@ volumes:
   namenode_data:
   datanode_data:
   nifi_data:
+  airflow_data:
   grafana_data:
