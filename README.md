@@ -24,6 +24,11 @@ docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights/csv
 docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights/parquet
 ```
 
+Per controllare il contenuto delle cartelle
+```bash
+ docker compose exec namenode hdfs dfs -ls /data/raw/flights/csv
+```
+
 ```bash
 docker compose exec namenode hdfs dfs -chown -R nifi:supergroup /data/raw/flights
 ```
