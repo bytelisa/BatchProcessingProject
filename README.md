@@ -5,7 +5,7 @@ A project by Valentina Jin and Elisa Marzioli.
 
 ```bash
 docker-compose up -d
-docker-compose up -d namenode datanode nifi airflow # per vale (solo nodi nifi, hadoop, airflow)
+docker-compose up -d namenode datanode nifi # per vale (solo nodi nifi, hadoop, airflow)
 ```
 
 ## 2. Initialize HDFS directories and permits for NiFi
@@ -53,5 +53,16 @@ docker compose exec spark-master /opt/spark/bin/spark-submit \
 oppure
 ```bash
 ./run.sh utils.py
+```
+
+## 5. Airflow (pipeline end-to-end)
+Comando per avviare airflow
+```bash
+docker compose up -d airflow
+```
+Comando per dare i permessi per usare socket docker senza fermare esecuzione (non persistente)
+La versione persistente è risolto con start.sh
+```bash
+docker compose exec --user root airflow chmod 666 /var/run/docker.sock
 ```
 

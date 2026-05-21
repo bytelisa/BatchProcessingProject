@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+echo "=== Fix permessi Docker socket ==="
+chmod 666 /var/run/docker.sock || true
+
 echo "=== DB migrate ==="
 airflow db migrate
 
