@@ -23,8 +23,6 @@ import time
 # Costanti
 # ─────────────────────────────────────────────────────────────
 
-
-
 # NiFi
 NIFI_BASE_URL = "http://nifi:9090/nifi-api"
 NIFI_PG_ID    = "4b2d988c-019e-1000-121f-1ffedd856d87"   # targz-from-url-to-csv-on-hdfs

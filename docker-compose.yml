@@ -12,6 +12,8 @@ services:
       - hadoop.env
     volumes:
       - namenode_data:/hadoop/dfs/name
+    networks:
+      - sabd-net
 
   datanode:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
@@ -26,6 +28,8 @@ services:
       - datanode_data:/hadoop/dfs/data
     depends_on:
       - namenode
+    networks:
+      - sabd-net
 
   spark-master:
     image: apache/spark:3.5.3
@@ -43,6 +47,8 @@ services:
     volumes:
       - ./src:/opt/scripts        # ← src è nella stessa cartella del docker-compose
       - ./results:/opt/results
+    networks:
+      - sabd-net
 
   spark-worker:
     image: apache/spark:3.5.3
@@ -57,6 +63,8 @@ services:
     volumes:
       - ./src:/opt/scripts
       - ./results:/opt/results
+    networks:
+      - sabd-net
 
   nifi:
     image: apache/nifi:1.23.2    # ← compatibile con HDFS, prima era 2.4.0
@@ -73,12 +81,15 @@ services:
     depends_on:
       - namenode
       - datanode
+    networks:
+      - sabd-net
 
   redis:
     image: redis:7.2
     ports:
       - "6379:6379"
-
+    networks:
+      - sabd-net
 
   airflow:
     image: apache/airflow:2.9.0
@@ -92,17 +103,19 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/start.sh:/start.sh:ro
+      - ./airflow/start.sh:/opt/start.sh:ro
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
+      - airflow_data:/opt/airflow
     depends_on:
       - namenode
       - spark-master
       - spark-worker
       - nifi
-    command: bash /start.sh
-
+    command: bash /opt/start.sh
+    networks:
+      - sabd-net
 
   grafana:
     image: grafana/grafana:10.4.0
@@ -112,6 +125,12 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana_data:/var/lib/grafana
+    networks:
+      - sabd-net
+
+networks:
+  sabd-net:
+    driver: bridge
 
 volumes:
   namenode_data:

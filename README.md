@@ -77,6 +77,25 @@ La versione persistente è risolto con start.sh
 docker compose exec --user root airflow chmod 666 /var/run/docker.sock
 ```
 
+# Entra nel container
+```bash
+docker exec -it batchprocessingproject-airflow-1 bash
+```
+
+# Lista i DAG run attivi
+```bash
+airflow dags list-runs -d sabd_project1_pipeline
+```
+
+# Ferma un DAG run specifico
+```bash
+airflow dags pause sabd_project1_pipeline
+```
+
+# Oppure marca come failed un task specifico
+```bash
+airflow tasks failed sabd_project1_pipeline spark_preprocessing <execution_date>
+```
 ## 6. Esecuzione preprocess manuale
 ```bash
     docker compose exec spark-master /opt/spark/bin/spark-submit \
