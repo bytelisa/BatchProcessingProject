@@ -77,3 +77,17 @@ La versione persistente è risolto con start.sh
 docker compose exec --user root airflow chmod 666 /var/run/docker.sock
 ```
 
+## 6. Esecuzione preprocess manuale
+```bash
+    docker compose exec spark-master /opt/spark/bin/spark-submit \
+        --master spark://spark-master:7077 \
+        /opt/scripts/preprocess.py
+```
+
+## 7. Esecuzione query manuale
+```bash
+    docker compose exec spark-master /opt/spark/bin/spark-submit \
+        --master spark://spark-master:7077 \
+        /opt/scripts/query1.py
+```
+

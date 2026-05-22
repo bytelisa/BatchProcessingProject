@@ -23,9 +23,11 @@ import time
 # Costanti
 # ─────────────────────────────────────────────────────────────
 
+
+
 # NiFi
 NIFI_BASE_URL = "http://nifi:9090/nifi-api"
-NIFI_PG_ID    = "40bb8925-019e-1000-46be-47cfebbc181a"   # targz-from-url-to-csv-on-hdfs
+NIFI_PG_ID    = "4b2d988c-019e-1000-121f-1ffedd856d87"   # targz-from-url-to-csv-on-hdfs
 
 # Nomi container Docker (verifica con: docker compose ps)
 NAMENODE_CONTAINER   = "batchprocessingproject-namenode-1"

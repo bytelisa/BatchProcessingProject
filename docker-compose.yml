@@ -92,14 +92,17 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/start.sh:/opt/airflow/start.sh
+      - ./airflow/start.sh:/start.sh:ro
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
-      - airflow_data:/opt/airflow
     depends_on:
       - namenode
       - spark-master
+      - spark-worker
       - nifi
-    command: bash /opt/airflow/start.sh
+    command: bash /start.sh
+
 
   grafana:
     image: grafana/grafana:10.4.0

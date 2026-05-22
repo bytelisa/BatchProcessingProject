@@ -93,23 +93,51 @@ def add_hour_column(df):
 def save_csv(df, filename: str, local: bool = True):
     """
     Salva il DataFrame come CSV.
-    - local=True  → /opt/results/<filename>  (visibile su ./results sul PC)
-    - local=False → HDFS /data/processed/flights/<filename>
-    Usa coalesce(1) per ottenere un singolo file CSV invece di tanti part-*.
+
+    - local=True:
+        salva un singolo file CSV locale in /opt/results/<filename>.csv
+        usando Python standard, non Spark writer.
+        Questo evita problemi di chmod sui bind mount Windows/WSL.
+
+    - local=False:
+        salva su HDFS in /data/processed/flights/<filename>
+        usando Spark writer.
+
+    Nota:
+    local=True è pensato per risultati aggregati piccoli, come Q1/Q2/Q3.
     """
+    import csv
+    import os
+
     if local:
-        path = f"{LOCAL_OUT_PATH}/{filename}"
+        os.makedirs(LOCAL_OUT_PATH, exist_ok=True)
+
+        path = f"{LOCAL_OUT_PATH}/{filename}.csv"
+
+        rows = df.collect()
+        columns = df.columns
+
+        with open(path, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(columns)
+
+            for row in rows:
+                writer.writerow([row[col] for col in columns])
+
+        print(f"[✓] Risultato locale salvato in: {path}")
+
     else:
         path = f"{HDFS_OUT_PATH}/{filename}"
 
-    (
-        df.coalesce(1)
-        .write
-        .mode("overwrite")
-        .option("header", "true")
-        .csv(path)
-    )
-    print(f"[✓] Risultato salvato in: {path}")
+        (
+            df.coalesce(1)
+            .write
+            .mode("overwrite")
+            .option("header", "true")
+            .csv(path)
+        )
+
+        print(f"[✓] Risultato HDFS salvato in: {path}")
 
 # ─────────────────────────────────────────────
 # Verifica setup (esegui questo file direttamente)
