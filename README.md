@@ -68,6 +68,7 @@ oppure
 ## 5. Airflow (pipeline end-to-end)
 Comando per avviare airflow
 ```bash
+chmod +x airflow/start.sh
 docker compose up -d airflow
 ```
 Comando per dare i permessi per usare socket docker senza fermare esecuzione (non persistente)
