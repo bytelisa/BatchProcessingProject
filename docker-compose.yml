@@ -57,6 +57,8 @@ services:
       - SPARK_HOME=/opt/spark
       - PYSPARK_PYTHON=python3
       - PYTHONPATH=/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
+      - SPARK_WORKER_MEMORY=3g        # aggiunta
+      - SPARK_WORKER_CORES=2          # aggiunta
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
     depends_on:
       - spark-master
@@ -101,6 +103,8 @@ services:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=60
+      - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=60
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/start.sh:/opt/start.sh:ro
