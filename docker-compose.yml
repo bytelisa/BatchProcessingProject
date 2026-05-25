@@ -88,8 +88,16 @@ services:
 
   redis:
     image: redis:7.2
+    container_name: redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
     networks:
       - sabd-net
 
@@ -123,10 +131,13 @@ services:
 
   grafana:
     image: grafana/grafana:10.4.0
+    container_name: grafana
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
     volumes:
       - grafana_data:/var/lib/grafana
     networks:
@@ -142,4 +153,5 @@ volumes:
   nifi_data:
   nifi_conf:
   airflow_data:
+  redis_data:
   grafana_data:
