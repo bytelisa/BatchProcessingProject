@@ -111,3 +111,25 @@ airflow tasks failed sabd_project1_pipeline spark_preprocessing <execution_date>
         /opt/scripts/query1.py
 ```
 
+## 8. Esecuzione query 3 bis
+```bash
+# Installazione le dipendenze e librerie su Docker
+# Master
+docker compose exec --user root spark-master pip install tdigest
+docker compose exec --user root spark-master pip install pandas pyarrow
+
+# Worker
+docker compose exec --user root spark-worker pip install tdigest
+docker compose exec --user root spark-worker pip install pandas pyarrow
+
+./run.sh query3_bis.py
+```
+
+## Giustificazione della differenza dei risultati delle due query che riguarda al calcolo di percentile:
+I due metodi producono risultati numericamente vicini ma semanticamente diversi. percentile_approx implementa 
+un quantile empirico discreto e restituisce sempre un valore osservato nel dataset, comportamento appropriato 
+per variabili come DEP_DELAY espresso in minuti interi. t-digest effettua interpolazione lineare tra i centroidi 
+dello sketch, restituendo valori decimali che non corrispondono a osservazioni reali. Dal punto di vista della 
+precisione, la differenza massima osservata tra i due metodi è inferiore a 1 minuto su tutti i quantili analizzati, 
+confermando che entrambi gli approcci sono adeguati per questo tipo di analisi.
+
