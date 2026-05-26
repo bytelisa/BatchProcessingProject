@@ -15,10 +15,15 @@ Per le compagnie AA e DL, aggregare i dati su base mensile e calcolare:
     percentuale di voli cancellati sul totale dei voli osservati
     nel gruppo mese-compagnia
 
+Parametri di run_query1():
+  save_output   (bool, default True)  — se False salta la scrittura CSV;
+                usato dal benchmark per non inquinare i tempi di computazione
+  print_preview (bool, default True)  — se False salta result.show();
+                usato dal benchmark per non inquinare wall_total_s
+
 Output:
 - CSV locale in /opt/results/query1_monthly_stats
 - CSV HDFS in /data/processed/flights/query1_monthly_stats
-
 """
 
 import time
@@ -32,7 +37,6 @@ from utils import (
 )
 
 
-# Deve essere coerente con il path usato dal preprocess.py e dal DAG Airflow.
 PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
 
 OUTPUT_NAME = "query1_monthly_stats"
@@ -40,9 +44,15 @@ OUTPUT_NAME = "query1_monthly_stats"
 TARGET_AIRLINES = ["AA", "DL"]
 
 
-def run_query1(spark):
+def run_query1(spark, save_output=True, print_preview=True):
     """
     Esegue la Query 1 usando DataFrame API.
+
+    Parametri:
+      save_output   — se False salta la scrittura CSV (benchmark: misura
+                      solo loading + computation, non I/O su HDFS)
+      print_preview — se False salta result.show() a console
+                      (benchmark: evita di inquinare wall_total_s)
 
     Nota metodologica:
     - Per DEP_DELAY e ARR_DELAY si considerano solo voli non cancellati.
@@ -62,8 +72,6 @@ def run_query1(spark):
 
     df = spark.read.parquet(PARQUET_PATH)
 
-    # Seleziono solo le colonne necessarie alla Q1.
-    # Questo è utile con Parquet perché permette column pruning.
     df = df.select(
         "MONTH",
         "OP_UNIQUE_CARRIER",
@@ -72,7 +80,7 @@ def run_query1(spark):
         "CANCELLED",
     )
 
-    timings["loading_s"] = time.time() - t0
+    timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
     # ─────────────────────────────────────────────
@@ -87,7 +95,7 @@ def run_query1(spark):
         F.col("OP_UNIQUE_CARRIER").isin(TARGET_AIRLINES)
     )
 
-    timings["filtering_s"] = time.time() - t1
+    timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.2f}s")
 
     # ─────────────────────────────────────────────
@@ -99,7 +107,7 @@ def run_query1(spark):
     t2 = time.time()
 
     is_not_cancelled = F.col("CANCELLED") == F.lit(0)
-    is_cancelled = F.col("CANCELLED") == F.lit(1)
+    is_cancelled     = F.col("CANCELLED") == F.lit(1)
 
     result = (
         df_filtered
@@ -108,17 +116,14 @@ def run_query1(spark):
             F.col("OP_UNIQUE_CARRIER").alias("airline"),
         )
         .agg(
-            # Conteggi di controllo
             F.count(F.lit(1)).alias("total_flights"),
             F.sum(is_cancelled.cast("long")).alias("cancelled_flights"),
             F.sum(is_not_cancelled.cast("long")).alias("non_cancelled_flights"),
 
-            # DEP_DELAY: solo voli non cancellati
             F.avg(F.when(is_not_cancelled, F.col("DEP_DELAY"))).alias("dep_delay_mean"),
             F.min(F.when(is_not_cancelled, F.col("DEP_DELAY"))).alias("dep_delay_min"),
             F.max(F.when(is_not_cancelled, F.col("DEP_DELAY"))).alias("dep_delay_max"),
 
-            # ARR_DELAY: solo voli non cancellati
             F.avg(F.when(is_not_cancelled, F.col("ARR_DELAY"))).alias("arr_delay_mean"),
             F.min(F.when(is_not_cancelled, F.col("ARR_DELAY"))).alias("arr_delay_min"),
             F.max(F.when(is_not_cancelled, F.col("ARR_DELAY"))).alias("arr_delay_max"),
@@ -137,45 +142,48 @@ def run_query1(spark):
             "cancelled_flights",
             "non_cancelled_flights",
             F.round("dep_delay_mean", 4).alias("dep_delay_mean"),
-            F.round("dep_delay_min", 4).alias("dep_delay_min"),
-            F.round("dep_delay_max", 4).alias("dep_delay_max"),
+            F.round("dep_delay_min",  4).alias("dep_delay_min"),
+            F.round("dep_delay_max",  4).alias("dep_delay_max"),
             F.round("arr_delay_mean", 4).alias("arr_delay_mean"),
-            F.round("arr_delay_min", 4).alias("arr_delay_min"),
-            F.round("arr_delay_max", 4).alias("arr_delay_max"),
+            F.round("arr_delay_min",  4).alias("arr_delay_min"),
+            F.round("arr_delay_max",  4).alias("arr_delay_max"),
             F.round("cancellation_rate", 4).alias("cancellation_rate"),
         )
         .orderBy("airline", "month")
     )
 
-    # Materializza la query per misurare il tempo di computazione.
+    # Materializza per misurare il tempo di computazione
     result_count = result.count()
 
-    timings["computation_s"] = time.time() - t2
+    timings["computation_s"] = round(time.time() - t2, 3)
     print(f"    Aggregazione completata in {timings['computation_s']:.2f}s")
     print(f"    Righe risultato: {result_count}")
 
     # ─────────────────────────────────────────────
-    # 4. Output
+    # 4. Anteprima (opzionale)
     # ─────────────────────────────────────────────
 
-    print("\n[4] Anteprima risultato:")
-    result.show(20, truncate=False)
+    if print_preview:
+        print("\n[4] Anteprima risultato:")
+        result.show(20, truncate=False)
 
-    print("\n[5] Salvataggio risultato CSV...")
+    # ─────────────────────────────────────────────
+    # 5. Output CSV (opzionale)
+    #    Saltato durante il benchmark (save_output=False) per non
+    #    inquinare la misurazione con latenza I/O su HDFS.
+    # ─────────────────────────────────────────────
 
-    t3 = time.time()
+    if save_output:
+        print("\n[5] Salvataggio risultato CSV...")
+        t3 = time.time()
+        save_csv(result, OUTPUT_NAME, local=True)
+        save_csv(result, OUTPUT_NAME, local=False)
+        timings["output_s"] = round(time.time() - t3, 3)
+        print(f"    Output completato in {timings['output_s']:.2f}s")
 
-    # Salvataggio locale: visibile nella cartella ./results del progetto
-    save_csv(result, OUTPUT_NAME, local=True)
-
-    # Salvataggio HDFS: utile per pipeline completa e Airflow
-    save_csv(result, OUTPUT_NAME, local=False)
-
-    timings["output_s"] = time.time() - t3
-
-    print(f"    Output completato in {timings['output_s']:.2f}s")
-
-    timings["total_s"] = sum(timings.values())
+    timings["total_s"] = round(
+        timings["loading_s"] + timings["filtering_s"] + timings["computation_s"], 3
+    )
 
     return result, timings
 
@@ -190,20 +198,19 @@ def main():
     spark = get_spark_session("SABD-Query1")
 
     try:
-        _, timings = run_query1(spark)
+        # Esecuzione standalone: save_output e print_preview entrambi True
+        _, timings = run_query1(spark, save_output=True, print_preview=True)
 
         total_elapsed = time.time() - total_start
 
         print("\n" + "=" * 72)
         print("TEMPI QUERY 1")
         print("=" * 72)
-        print(f"Loading:      {timings['loading_s']:.2f}s")
-        print(f"Filtering:    {timings['filtering_s']:.2f}s")
-        print(f"Computation:  {timings['computation_s']:.2f}s")
-        print(f"Output:       {timings['output_s']:.2f}s")
-        print(f"Totale fasi:  {timings['total_s']:.2f}s")
-        print(f"Totale script:{total_elapsed:.2f}s")
-
+        print(f"  Loading:      {timings['loading_s']:.3f}s")
+        print(f"  Filtering:    {timings['filtering_s']:.3f}s")
+        print(f"  Computation:  {timings['computation_s']:.3f}s")
+        print(f"  Output:       {timings.get('output_s', 0):.3f}s")
+        print(f"  Totale:       {total_elapsed:.3f}s")
         print("\n[✓] Query 1 completata correttamente")
 
     finally:

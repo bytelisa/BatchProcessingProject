@@ -12,9 +12,15 @@ L'output viene scritto direttamente come RDD su HDFS e come CSV locale
 tramite Python puro, senza alcuna conversione a DataFrame — in modo da
 misurare i tempi in modo pulito e confrontarli con query1.py (DataFrame).
 
+Parametri di run_query1_rdd():
+  save_output   (bool, default True)  — se False salta la scrittura CSV;
+                usato dal benchmark per non inquinare i tempi di computazione
+  print_preview (bool, default True)  — se False salta la stampa dell'anteprima;
+                usato dal benchmark per non inquinare wall_total_s
+
 Output:
 - CSV locale  → /opt/results/query1_rdd_monthly_stats.csv
-- CSV su HDFS → /data/processed/flights/query1_rdd_monthly_stats/
+- CSV su HDFS → hdfs://.../query1_rdd_monthly_stats/
 """
 
 import csv
@@ -83,11 +89,8 @@ def save_rdd_hdfs(result_rdd, hdfs_path, header):
     Elimina il path di destinazione se già esiste (overwrite).
     """
     sc = result_rdd.context
-
     delete_hdfs_if_exists(sc, hdfs_path)
-
     header_rdd = sc.parallelize([header])
-
     (
         header_rdd
         .union(result_rdd.map(
@@ -103,9 +106,15 @@ def save_rdd_hdfs(result_rdd, hdfs_path, header):
 # Core
 # ─────────────────────────────────────────────
 
-def run_query1_rdd(spark):
+def run_query1_rdd(spark, save_output=True, print_preview=True):
     """
     Esegue la Query 1 usando l'API RDD dall'inizio alla fine.
+
+    Parametri:
+      save_output   — se False salta la scrittura CSV (benchmark: misura
+                      solo loading + computation, non I/O su HDFS)
+      print_preview — se False salta la stampa dell'anteprima a console
+                      (benchmark: evita di inquinare wall_total_s)
 
     Strategia a due rami + join:
     ┌─────────────────────────────┐
@@ -128,10 +137,7 @@ def run_query1_rdd(spark):
     timings = {}
 
     # ─────────────────────────────────────────────
-    # 1. Loading — Parquet → RDD
-    #    Usiamo df.rdd per leggere Parquet (formato binario non
-    #    leggibile direttamente dall'API RDD testuale).
-    #    Da questo punto in poi nessun DataFrame viene più usato.
+    # 1. Loading
     # ─────────────────────────────────────────────
 
     print("\n[1] Lettura Parquet e conversione in RDD...")
@@ -151,10 +157,10 @@ def run_query1_rdd(spark):
             row["CANCELLED"],           # 4: cancelled (int)
         ))
         .filter(lambda r: r[0] in TARGET_AIRLINES)
-        .cache()  # riutilizzato nei tre rami seguenti
+        .cache()
     )
 
-    timings["loading_s"] = time.time() - t0
+    timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
     # ─────────────────────────────────────────────
@@ -165,20 +171,11 @@ def run_query1_rdd(spark):
 
     t1 = time.time()
 
-    # Accumulatore: (somma, min, max, count)
-    def create_combiner(v):
-        return (v, v, v, 1)
+    def create_combiner(v):  return (v, v, v, 1)
+    def merge_value(acc, v): return (acc[0]+v, min(acc[1],v), max(acc[2],v), acc[3]+1)
+    def merge_combiners(a, b): return (a[0]+b[0], min(a[1],b[1]), max(a[2],b[2]), a[3]+b[3])
+    def to_stats(acc): return (round(acc[0]/acc[3],4), round(acc[1],4), round(acc[2],4))
 
-    def merge_value(acc, v):
-        return (acc[0] + v, min(acc[1], v), max(acc[2], v), acc[3] + 1)
-
-    def merge_combiners(a, b):
-        return (a[0] + b[0], min(a[1], b[1]), max(a[2], b[2]), a[3] + b[3])
-
-    def to_stats(acc):
-        return (round(acc[0] / acc[3], 4), round(acc[1], 4), round(acc[2], 4))
-
-    # Ramo 1a — DEP_DELAY stats: key=(month, carrier), val=dep_delay
     dep_stats = (
         rdd_base
         .filter(lambda r: r[4] == 0 and r[2] is not None)
@@ -187,7 +184,6 @@ def run_query1_rdd(spark):
         .mapValues(to_stats)
     )
 
-    # Ramo 1b — ARR_DELAY stats: key=(month, carrier), val=arr_delay
     arr_stats = (
         rdd_base
         .filter(lambda r: r[4] == 0 and r[3] is not None)
@@ -196,81 +192,77 @@ def run_query1_rdd(spark):
         .mapValues(to_stats)
     )
 
-    # Ramo 2 — Cancellation rate: tutti i voli
     cancel_stats = (
         rdd_base
-        .map(lambda r: ((r[1], r[0]), (r[4], 1)))   # ((month,carrier), (cancelled,1))
-        .reduceByKey(lambda a, b: (a[0] + b[0], a[1] + b[1]))
-        .mapValues(lambda v: round((v[0] / v[1]) * 100.0, 4))
+        .map(lambda r: ((r[1], r[0]), (r[4], 1)))
+        .reduceByKey(lambda a, b: (a[0]+b[0], a[1]+b[1]))
+        .mapValues(lambda v: round((v[0]/v[1])*100.0, 4))
     )
 
-    # Join: dep_stats JOIN arr_stats JOIN cancel_stats
     result_rdd = (
         dep_stats
-        .join(arr_stats)       # → (key, ((dep_mean,dep_min,dep_max), (arr_mean,arr_min,arr_max)))
-        .join(cancel_stats)    # → (key, (((dep...), (arr...)), cancel_rate))
+        .join(arr_stats)
+        .join(cancel_stats)
         .map(lambda kv: (
-            kv[0][0],              # month
-            kv[0][1],              # airline
-            kv[1][0][0][0],        # dep_delay_mean
-            kv[1][0][0][1],        # dep_delay_min
-            kv[1][0][0][2],        # dep_delay_max
-            kv[1][0][1][0],        # arr_delay_mean
-            kv[1][0][1][1],        # arr_delay_min
-            kv[1][0][1][2],        # arr_delay_max
-            kv[1][1],              # cancellation_rate
+            kv[0][0],           # month
+            kv[0][1],           # airline
+            kv[1][0][0][0],     # dep_delay_mean
+            kv[1][0][0][1],     # dep_delay_min
+            kv[1][0][0][2],     # dep_delay_max
+            kv[1][0][1][0],     # arr_delay_mean
+            kv[1][0][1][1],     # arr_delay_min
+            kv[1][0][1][2],     # arr_delay_max
+            kv[1][1],           # cancellation_rate
         ))
-        .sortBy(lambda r: (r[1], r[0]))  # ordina per airline, month
+        .sortBy(lambda r: (r[1], r[0]))
     )
 
-    # Materializza per misurare il tempo di computazione
     rows = result_rdd.collect()
 
-    timings["computation_s"] = time.time() - t1
+    timings["computation_s"] = round(time.time() - t1, 3)
     print(f"    Computation completata in {timings['computation_s']:.2f}s")
     print(f"    Righe risultato: {len(rows)}")
 
     # ─────────────────────────────────────────────
-    # 3. Anteprima console
+    # 3. Anteprima console (opzionale)
     # ─────────────────────────────────────────────
 
-    print("\n[3] Anteprima risultato:")
-    print(f"  {'month':5s} {'airline':8s} {'dep_mean':10s} {'dep_min':10s} {'dep_max':10s}"
-          f" {'arr_mean':10s} {'arr_min':10s} {'arr_max':10s} {'canc_rate':10s}")
-    print("  " + "-" * 90)
-    for r in rows:
-        print(
-            f"  {r[0]:5d} {r[1]:8s} {r[2]:10.4f} {r[3]:10.4f} {r[4]:10.4f}"
-            f" {r[5]:10.4f} {r[6]:10.4f} {r[7]:10.4f} {r[8]:10.4f}"
-        )
+    if print_preview:
+        print("\n[3] Anteprima risultato:")
+        print(f"  {'month':5s} {'airline':8s} {'dep_mean':10s} {'dep_min':10s} {'dep_max':10s}"
+              f" {'arr_mean':10s} {'arr_min':10s} {'arr_max':10s} {'canc_rate':10s}")
+        print("  " + "-" * 90)
+        for r in rows:
+            print(
+                f"  {r[0]:5d} {r[1]:8s} {r[2]:10.4f} {r[3]:10.4f} {r[4]:10.4f}"
+                f" {r[5]:10.4f} {r[6]:10.4f} {r[7]:10.4f} {r[8]:10.4f}"
+            )
 
     # ─────────────────────────────────────────────
-    # 4. Output — scritto direttamente come RDD,
-    #    senza alcuna conversione a DataFrame
+    # 4. Output CSV (opzionale)
+    #    Saltato durante il benchmark (save_output=False) per non
+    #    inquinare la misurazione con latenza I/O su HDFS.
     # ─────────────────────────────────────────────
 
-    print("\n[4] Salvataggio CSV (RDD puro)...")
-
-    t2 = time.time()
-
-    # Locale: Python puro (lista di tuple già sul driver dopo collect)
-    save_rdd_local(rows, LOCAL_OUTPUT, CSV_HEADER)
-
-    # HDFS: saveAsTextFile su RDD già ordinato
-    save_rdd_hdfs(result_rdd, HDFS_OUTPUT, CSV_HEADER)
-
-    timings["output_s"] = time.time() - t2
-    print(f"    Output completato in {timings['output_s']:.2f}s")
+    if save_output:
+        print("\n[4] Salvataggio CSV (RDD puro)...")
+        t2 = time.time()
+        save_rdd_local(rows, LOCAL_OUTPUT, CSV_HEADER)
+        save_rdd_hdfs(result_rdd, HDFS_OUTPUT, CSV_HEADER)
+        timings["output_s"] = round(time.time() - t2, 3)
+        print(f"    Output completato in {timings['output_s']:.2f}s")
 
     rdd_base.unpersist()
 
-    timings["total_s"] = sum(timings.values())
+    timings["total_s"] = round(
+        timings["loading_s"] + timings["computation_s"], 3
+    )
 
     return rows, timings
 
 
 # ─────────────────────────────────────────────
-# Main
+# Main — esecuzione standalone
 # ─────────────────────────────────────────────
 
 def main():
@@ -283,19 +275,18 @@ def main():
     spark = get_spark_session("SABD-Query1-RDD")
 
     try:
-        _, timings = run_query1_rdd(spark)
+        # Esecuzione standalone: save_output e print_preview entrambi True
+        _, timings = run_query1_rdd(spark, save_output=True, print_preview=True)
 
         total_elapsed = time.time() - total_start
 
         print("\n" + "=" * 72)
         print("TEMPI QUERY 1 (RDD)")
         print("=" * 72)
-        print(f"Loading:      {timings['loading_s']:.2f}s")
-        print(f"Computation:  {timings['computation_s']:.2f}s")
-        print(f"Output:       {timings['output_s']:.2f}s")
-        print(f"Totale fasi:  {timings['total_s']:.2f}s")
-        print(f"Totale script:{total_elapsed:.2f}s")
-
+        print(f"  Loading:      {timings['loading_s']:.3f}s")
+        print(f"  Computation:  {timings['computation_s']:.3f}s")
+        print(f"  Output:       {timings.get('output_s', 0):.3f}s")
+        print(f"  Totale:       {total_elapsed:.3f}s")
         print("\n[✓] Query 1 RDD completata correttamente")
 
     finally:
