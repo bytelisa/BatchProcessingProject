@@ -30,7 +30,7 @@ import sys
 
 TOTAL_ITERATIONS  = 20   # iterazioni totali per query
 WARMUP_ITERATIONS =  5   # iterazioni di warm-up (escluse dalla statistica)
-QUERIES_TO_RUN    = [1, 3]  # quali query eseguire; rimuovi quelle che non vuoi eseguire
+QUERIES_TO_RUN    = [4]  # quali query eseguire; rimuovi quelle che non vuoi eseguire
 
 # Dove scrivere il report finale
 BENCHMARK_REPORT_PATH = "/opt/results/benchmark_report.csv"
@@ -54,6 +54,8 @@ if 2 in QUERIES_TO_RUN:
     from query2 import run_query2
 if 3 in QUERIES_TO_RUN:
     from query3 import run_query3
+if 4 in QUERIES_TO_RUN:
+    from query3_bis import run_query3_bis
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -110,6 +112,8 @@ def _run_and_time_query(query_id, spark):
         _, timings = run_query2(spark)
     elif query_id == 3:
         _, _, timings = run_query3(spark)
+    elif query_id == 4:
+        _, _, timings = run_query3_bis(spark)
     else:
         raise ValueError(f"Query {query_id} non supportata in questo benchmark.")
 

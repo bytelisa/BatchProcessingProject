@@ -32,7 +32,6 @@ Output (stessi file di query3.py, con suffisso _tdigest):
 import time
 
 import pandas as pd
-from tdigest import TDigest
 
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
@@ -80,57 +79,6 @@ PERCENTILE_SCHEMA = StructType([
 ])
 
 
-# ─────────────────────────────────────────────
-# UDF t-digest
-# ─────────────────────────────────────────────
-
-def tdigest_percentiles(pdf: pd.DataFrame) -> pd.DataFrame:
-    """
-    Funzione applicata da applyInPandas a ogni gruppo (airline, hour).
-
-    Riceve un pandas DataFrame con le colonne:
-        OP_UNIQUE_CARRIER, HOUR, DEP_DELAY
-
-    Restituisce un pandas DataFrame con una sola riga:
-        airline, hour, num_flights, p25, p50, p75, p90
-
-    Il t-digest viene costruito incrementalmente su tutti i valori
-    DEP_DELAY del gruppo, poi si interroga per i 4 quantili.
-    """
-
-    # Recupera i metadati del gruppo dalle prime riga
-    airline = pdf["OP_UNIQUE_CARRIER"].iloc[0]
-    hour    = int(pdf["HOUR"].iloc[0])
-
-    delays = pdf["DEP_DELAY"].dropna().tolist()
-    n = len(delays)
-
-    if n == 0:
-        # Gruppo vuoto (non dovrebbe accadere dopo il filtro, ma per sicurezza)
-        return pd.DataFrame([{
-            "airline":     airline,
-            "hour":        hour,
-            "num_flights": 0,
-            "p25":         None,
-            "p50":         None,
-            "p75":         None,
-            "p90":         None,
-        }])
-
-    # Costruisce il t-digest e alimenta tutti i valori del gruppo
-    td = TDigest(delta=TDIGEST_DELTA)
-    for v in delays:
-        td.update(v)
-
-    return pd.DataFrame([{
-        "airline":     airline,
-        "hour":        hour,
-        "num_flights": n,
-        "p25":         td.percentile(25),
-        "p50":         td.percentile(50),
-        "p75":         td.percentile(75),
-        "p90":         td.percentile(90),
-    }])
 
 
 # ─────────────────────────────────────────────
@@ -152,6 +100,53 @@ def run_query3_bis(spark):
     """
 
     timings = {}
+
+    # ── FIX: la UDF è definita come closure locale ────────────────────────
+    # In questo modo cloudpickle la serializza per intero (corpo incluso)
+    # senza registrare alcun riferimento al modulo 'query3_bis'.
+    # Gli executor ricevono il bytecode completo e non cercano il modulo.
+    from tdigest import TDigest  # import locale: incluso nella closure
+
+    def tdigest_percentiles(pdf: pd.DataFrame) -> pd.DataFrame:
+        """
+        Funzione applicata da applyInPandas a ogni gruppo (airline, hour).
+
+        Riceve un pandas DataFrame con le colonne:
+            OP_UNIQUE_CARRIER, HOUR, DEP_DELAY
+
+        Restituisce un pandas DataFrame con una sola riga:
+            airline, hour, num_flights, p25, p50, p75, p90
+        """
+        airline = pdf["OP_UNIQUE_CARRIER"].iloc[0]
+        hour = int(pdf["HOUR"].iloc[0])
+
+        delays = pdf["DEP_DELAY"].dropna().tolist()
+        n = len(delays)
+
+        if n == 0:
+            return pd.DataFrame([{
+                "airline": airline,
+                "hour": hour,
+                "num_flights": 0,
+                "p25": None,
+                "p50": None,
+                "p75": None,
+                "p90": None,
+            }])
+
+        td = TDigest(delta=TDIGEST_DELTA)
+        for v in delays:
+            td.update(v)
+
+        return pd.DataFrame([{
+            "airline": airline,
+            "hour": hour,
+            "num_flights": n,
+            "p25": td.percentile(25),
+            "p50": td.percentile(50),
+            "p75": td.percentile(75),
+            "p90": td.percentile(90),
+        }])
 
     # ─────────────────────────────────────────────
     # 1. Loading
