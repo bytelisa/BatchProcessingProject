@@ -8,25 +8,24 @@ Per le compagnie AA e DL, aggregare i dati su base mensile e calcolare:
 - statistiche ARR_DELAY sui soli voli non cancellati: mean, min, max
 - cancellation rate: percentuale di voli cancellati sul totale
 
-Questa implementazione usa l'API RDD di basso livello e può essere
-confrontata con la versione DataFrame (query1.py) per valutare le
-differenze di performance.
+L'output viene scritto direttamente come RDD su HDFS e come CSV locale
+tramite Python puro, senza alcuna conversione a DataFrame — in modo da
+misurare i tempi in modo pulito e confrontarli con query1.py (DataFrame).
 
 Output:
-- CSV locale in /opt/results/query1_rdd_monthly_stats.csv
-- CSV HDFS in /data/processed/flights/query1_rdd_monthly_stats
+- CSV locale  → /opt/results/query1_rdd_monthly_stats.csv
+- CSV su HDFS → /data/processed/flights/query1_rdd_monthly_stats/
 """
 
+import csv
+import os
 import time
-import statistics
-
-from pyspark import SparkContext
-from pyspark.sql import SparkSession
 
 from utils import (
     get_spark_session,
-    save_csv,
     HDFS_BASE,
+    LOCAL_OUT_PATH,
+    HDFS_OUT_PATH,
 )
 
 # ─────────────────────────────────────────────
@@ -36,30 +35,77 @@ from utils import (
 PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
 OUTPUT_NAME  = "query1_rdd_monthly_stats"
 
+HDFS_OUTPUT  = f"{HDFS_OUT_PATH}/{OUTPUT_NAME}"
+LOCAL_OUTPUT = f"{LOCAL_OUT_PATH}/{OUTPUT_NAME}.csv"
+
+CSV_HEADER = "month,airline,dep_delay_mean,dep_delay_min,dep_delay_max," \
+             "arr_delay_mean,arr_delay_min,arr_delay_max,cancellation_rate"
+
 TARGET_AIRLINES = {"AA", "DL"}
 
 
 # ─────────────────────────────────────────────
-# Helpers
+# Salvataggio RDD — nessun DataFrame coinvolto
 # ─────────────────────────────────────────────
 
-def to_row_dict(row):
+def save_rdd_local(rows, filepath, header):
     """
-    Converte una Row Spark (letta da Parquet) in un dizionario Python.
-    I campi numerici possono essere None per voli cancellati.
+    Scrive le righe (lista di tuple) in un file CSV locale
+    usando Python puro — nessuna conversione a DataFrame.
     """
-    return {
-        "carrier":   row["OP_UNIQUE_CARRIER"],
-        "month":     row["MONTH"],
-        "dep_delay": row["DEP_DELAY"],   # float o None
-        "arr_delay": row["ARR_DELAY"],   # float o None
-        "cancelled": row["CANCELLED"],   # int: 0 o 1
-    }
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(header.split(","))
+        writer.writerows(rows)
+    print(f"[✓] CSV locale salvato in: {filepath}")
 
+
+def delete_hdfs_if_exists(sc, hdfs_path):
+    """
+    Elimina il path HDFS se esiste, per permettere sovrascrittura.
+    saveAsTextFile non supporta overwrite nativo: bisogna cancellare prima.
+    Usa l'API Java di Hadoop tramite il gateway Py4J di Spark.
+    """
+    jvm  = sc._jvm
+    conf = sc._jsc.hadoopConfiguration()
+    path = jvm.org.apache.hadoop.fs.Path(hdfs_path)
+    fs   = jvm.org.apache.hadoop.fs.FileSystem.get(conf)
+    if fs.exists(path):
+        fs.delete(path, True)   # True = ricorsivo
+        print(f"    [!] Path HDFS esistente eliminato: {hdfs_path}")
+
+
+def save_rdd_hdfs(result_rdd, hdfs_path, header):
+    """
+    Scrive l'RDD su HDFS come testo CSV usando saveAsTextFile.
+    Prepende l'header tramite union — nessuna conversione a DataFrame.
+    Elimina il path di destinazione se già esiste (overwrite).
+    """
+    sc = result_rdd.context
+
+    delete_hdfs_if_exists(sc, hdfs_path)
+
+    header_rdd = sc.parallelize([header])
+
+    (
+        header_rdd
+        .union(result_rdd.map(
+            lambda r: f"{r[0]},{r[1]},{r[2]},{r[3]},{r[4]},{r[5]},{r[6]},{r[7]},{r[8]}"
+        ))
+        .coalesce(1)
+        .saveAsTextFile(hdfs_path)
+    )
+    print(f"[✓] CSV HDFS salvato in: {hdfs_path}")
+
+
+# ─────────────────────────────────────────────
+# Core
+# ─────────────────────────────────────────────
 
 def run_query1_rdd(spark):
     """
-    Esegue la Query 1 usando l'API RDD.
+    Esegue la Query 1 usando l'API RDD dall'inizio alla fine.
 
     Strategia a due rami + join:
     ┌─────────────────────────────┐
@@ -74,18 +120,18 @@ def run_query1_rdd(spark):
     │                 n_tot)      │
     └─────────────────────────────┘
 
-    Nota: combineByKey è preferibile a groupByKey perché aggrega
-    parzialmente all'interno di ogni partizione PRIMA del shuffle,
-    riducendo i dati trasferiti in rete tra i nodi.
+    combineByKey è preferibile a groupByKey perché aggrega parzialmente
+    all'interno di ogni partizione PRIMA del shuffle, riducendo i dati
+    trasferiti in rete tra i nodi.
     """
 
     timings = {}
 
-    sc = spark.sparkContext
-
     # ─────────────────────────────────────────────
-    # 1. Loading — legge il Parquet tramite DataFrame
-    #    poi converte in RDD di dizionari
+    # 1. Loading — Parquet → RDD
+    #    Usiamo df.rdd per leggere Parquet (formato binario non
+    #    leggibile direttamente dall'API RDD testuale).
+    #    Da questo punto in poi nessun DataFrame viene più usato.
     # ─────────────────────────────────────────────
 
     print("\n[1] Lettura Parquet e conversione in RDD...")
@@ -93,35 +139,33 @@ def run_query1_rdd(spark):
 
     t0 = time.time()
 
-    df_raw = spark.read.parquet(PARQUET_PATH).select(
-        "MONTH",
-        "OP_UNIQUE_CARRIER",
-        "DEP_DELAY",
-        "ARR_DELAY",
-        "CANCELLED",
-    )
-
-    # Conversione DataFrame → RDD di dizionari e filtraggio compagnie
     rdd_base = (
-        df_raw.rdd
-        .map(to_row_dict)
-        .filter(lambda r: r["carrier"] in TARGET_AIRLINES)
-        .cache()   # riutilizzato nei due rami
+        spark.read.parquet(PARQUET_PATH)
+        .select("MONTH", "OP_UNIQUE_CARRIER", "DEP_DELAY", "ARR_DELAY", "CANCELLED")
+        .rdd
+        .map(lambda row: (
+            row["OP_UNIQUE_CARRIER"],   # 0: carrier
+            row["MONTH"],               # 1: month
+            row["DEP_DELAY"],           # 2: dep_delay (float o None)
+            row["ARR_DELAY"],           # 3: arr_delay (float o None)
+            row["CANCELLED"],           # 4: cancelled (int)
+        ))
+        .filter(lambda r: r[0] in TARGET_AIRLINES)
+        .cache()  # riutilizzato nei tre rami seguenti
     )
 
     timings["loading_s"] = time.time() - t0
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
     # ─────────────────────────────────────────────
-    # 2. Ramo 1 — Statistiche ritardi
-    #    Solo voli NON cancellati, con DEP_DELAY/ARR_DELAY non nulli
+    # 2. Aggregazioni
     # ─────────────────────────────────────────────
 
-    print("\n[2] Calcolo statistiche ritardi (RDD)...")
+    print("\n[2] Calcolo statistiche (RDD)...")
 
     t1 = time.time()
 
-    # Accumulatore per una singola metrica: (somma, min, max, count)
+    # Accumulatore: (somma, min, max, count)
     def create_combiner(v):
         return (v, v, v, 1)
 
@@ -131,144 +175,98 @@ def run_query1_rdd(spark):
     def merge_combiners(a, b):
         return (a[0] + b[0], min(a[1], b[1]), max(a[2], b[2]), a[3] + b[3])
 
-    def acc_to_stats(acc):
-        """(somma, min, max, count) → (mean, min, max) arrotondati a 4 decimali"""
-        mean = round(acc[0] / acc[3], 4)
-        mn   = round(acc[1], 4)
-        mx   = round(acc[2], 4)
-        return (mean, mn, mx)
+    def to_stats(acc):
+        return (round(acc[0] / acc[3], 4), round(acc[1], 4), round(acc[2], 4))
 
-    # DEP_DELAY stats
+    # Ramo 1a — DEP_DELAY stats: key=(month, carrier), val=dep_delay
     dep_stats = (
         rdd_base
-        .filter(lambda r: r["cancelled"] == 0 and r["dep_delay"] is not None)
-        .map(lambda r: ((r["month"], r["carrier"]), r["dep_delay"]))
+        .filter(lambda r: r[4] == 0 and r[2] is not None)
+        .map(lambda r: ((r[1], r[0]), r[2]))
         .combineByKey(create_combiner, merge_value, merge_combiners)
-        .mapValues(acc_to_stats)
+        .mapValues(to_stats)
     )
 
-    # ARR_DELAY stats
+    # Ramo 1b — ARR_DELAY stats: key=(month, carrier), val=arr_delay
     arr_stats = (
         rdd_base
-        .filter(lambda r: r["cancelled"] == 0 and r["arr_delay"] is not None)
-        .map(lambda r: ((r["month"], r["carrier"]), r["arr_delay"]))
+        .filter(lambda r: r[4] == 0 and r[3] is not None)
+        .map(lambda r: ((r[1], r[0]), r[3]))
         .combineByKey(create_combiner, merge_value, merge_combiners)
-        .mapValues(acc_to_stats)
+        .mapValues(to_stats)
     )
 
-    # Unisce dep e arr stats: stessa key (month, carrier)
-    # delay_combined: key → ((dep_mean, dep_min, dep_max), (arr_mean, arr_min, arr_max))
-    delay_combined = dep_stats.join(arr_stats)
-
-    # ─────────────────────────────────────────────
-    # 3. Ramo 2 — Cancellation rate (tutti i voli)
-    # ─────────────────────────────────────────────
-
+    # Ramo 2 — Cancellation rate: tutti i voli
     cancel_stats = (
         rdd_base
-        .map(lambda r: (
-            (r["month"], r["carrier"]),
-            (r["cancelled"], 1)          # (n_cancellati, n_totali)
-        ))
+        .map(lambda r: ((r[1], r[0]), (r[4], 1)))   # ((month,carrier), (cancelled,1))
         .reduceByKey(lambda a, b: (a[0] + b[0], a[1] + b[1]))
         .mapValues(lambda v: round((v[0] / v[1]) * 100.0, 4))
     )
 
+    # Join: dep_stats JOIN arr_stats JOIN cancel_stats
+    result_rdd = (
+        dep_stats
+        .join(arr_stats)       # → (key, ((dep_mean,dep_min,dep_max), (arr_mean,arr_min,arr_max)))
+        .join(cancel_stats)    # → (key, (((dep...), (arr...)), cancel_rate))
+        .map(lambda kv: (
+            kv[0][0],              # month
+            kv[0][1],              # airline
+            kv[1][0][0][0],        # dep_delay_mean
+            kv[1][0][0][1],        # dep_delay_min
+            kv[1][0][0][2],        # dep_delay_max
+            kv[1][0][1][0],        # arr_delay_mean
+            kv[1][0][1][1],        # arr_delay_min
+            kv[1][0][1][2],        # arr_delay_max
+            kv[1][1],              # cancellation_rate
+        ))
+        .sortBy(lambda r: (r[1], r[0]))  # ordina per airline, month
+    )
+
+    # Materializza per misurare il tempo di computazione
+    rows = result_rdd.collect()
+
     timings["computation_s"] = time.time() - t1
     print(f"    Computation completata in {timings['computation_s']:.2f}s")
+    print(f"    Righe risultato: {len(rows)}")
 
     # ─────────────────────────────────────────────
-    # 4. Join dei due rami e costruzione risultato finale
+    # 3. Anteprima console
     # ─────────────────────────────────────────────
 
-    print("\n[3] Join delay stats + cancel rate...")
-
-    result_rdd = (
-        delay_combined
-        .join(cancel_stats)
-        # kv = ((month, carrier), (((dep_mean,dep_min,dep_max),(arr_mean,arr_min,arr_max)), cancel_rate))
-        .map(lambda kv: (
-            kv[0][1],                   # airline
-            kv[0][0],                   # month
-            kv[1][0][0][0],             # dep_delay_mean
-            kv[1][0][0][1],             # dep_delay_min
-            kv[1][0][0][2],             # dep_delay_max
-            kv[1][0][1][0],             # arr_delay_mean
-            kv[1][0][1][1],             # arr_delay_min
-            kv[1][0][1][2],             # arr_delay_max
-            kv[1][1],                   # cancellation_rate
-        ))
-        .sortBy(lambda r: (r[0], r[1]))  # ordina per airline, month
-    )
-
-    # ─────────────────────────────────────────────
-    # 5. Materializzazione e conversione a DataFrame
-    #    per usare save_csv() di utils.py
-    # ─────────────────────────────────────────────
-
-    print("\n[4] Materializzazione risultato...")
-
-    rows = result_rdd.collect()
-    result_count = len(rows)
-    print(f"    Righe risultato: {result_count}")
-
-    # ─────────────────────────────────────────────
-    # 6. Anteprima console
-    # ─────────────────────────────────────────────
-
-    header = (
-        "airline | month | dep_delay_mean | dep_delay_min | dep_delay_max |"
-        " arr_delay_mean | arr_delay_min | arr_delay_max | cancellation_rate"
-    )
-    print("\n[5] Anteprima risultato (prime 10 righe):")
-    print("-" * len(header))
-    print(header)
-    print("-" * len(header))
-    for r in rows[:10]:
+    print("\n[3] Anteprima risultato:")
+    print(f"  {'month':5s} {'airline':8s} {'dep_mean':10s} {'dep_min':10s} {'dep_max':10s}"
+          f" {'arr_mean':10s} {'arr_min':10s} {'arr_max':10s} {'canc_rate':10s}")
+    print("  " + "-" * 90)
+    for r in rows:
         print(
-            f"  {r[0]:6s} | {r[1]:5d} | {r[2]:14.4f} | {r[3]:13.4f} | "
-            f"{r[4]:13.4f} | {r[5]:14.4f} | {r[6]:13.4f} | {r[7]:13.4f} | {r[8]:17.4f}"
+            f"  {r[0]:5d} {r[1]:8s} {r[2]:10.4f} {r[3]:10.4f} {r[4]:10.4f}"
+            f" {r[5]:10.4f} {r[6]:10.4f} {r[7]:10.4f} {r[8]:10.4f}"
         )
 
     # ─────────────────────────────────────────────
-    # 7. Salvataggio — convertiamo l'RDD in DataFrame
-    #    per riutilizzare save_csv() di utils.py
+    # 4. Output — scritto direttamente come RDD,
+    #    senza alcuna conversione a DataFrame
     # ─────────────────────────────────────────────
 
-    print("\n[6] Salvataggio risultati CSV...")
+    print("\n[4] Salvataggio CSV (RDD puro)...")
 
-    t3 = time.time()
+    t2 = time.time()
 
-    from pyspark.sql import Row
+    # Locale: Python puro (lista di tuple già sul driver dopo collect)
+    save_rdd_local(rows, LOCAL_OUTPUT, CSV_HEADER)
 
-    result_df = spark.createDataFrame(
-        [Row(
-            airline=r[0],
-            month=r[1],
-            dep_delay_mean=r[2],
-            dep_delay_min=r[3],
-            dep_delay_max=r[4],
-            arr_delay_mean=r[5],
-            arr_delay_min=r[6],
-            arr_delay_max=r[7],
-            cancellation_rate=r[8],
-        ) for r in rows]
-    ).select(
-        "month", "airline",
-        "dep_delay_mean", "dep_delay_min", "dep_delay_max",
-        "arr_delay_mean", "arr_delay_min", "arr_delay_max",
-        "cancellation_rate",
-    ).orderBy("airline", "month")
+    # HDFS: saveAsTextFile su RDD già ordinato
+    save_rdd_hdfs(result_rdd, HDFS_OUTPUT, CSV_HEADER)
 
-    save_csv(result_df, OUTPUT_NAME, local=True)
-    save_csv(result_df, OUTPUT_NAME, local=False)
-
-    timings["output_s"] = time.time() - t3
+    timings["output_s"] = time.time() - t2
     print(f"    Output completato in {timings['output_s']:.2f}s")
+
+    rdd_base.unpersist()
 
     timings["total_s"] = sum(timings.values())
 
-    return result_df, timings
+    return rows, timings
 
 
 # ─────────────────────────────────────────────
