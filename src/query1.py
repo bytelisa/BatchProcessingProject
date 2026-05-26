@@ -16,7 +16,7 @@ Per le compagnie AA e DL, aggregare i dati su base mensile e calcolare:
     nel gruppo mese-compagnia
 
 Output:
-- CSV locale in /opt/results/query1_monthly_stats
+- CSV locale in /opt/output/query1_monthly_stats
 - CSV HDFS in /data/processed/flights/query1_monthly_stats
 
 """
@@ -165,7 +165,7 @@ def run_query1(spark):
 
     t3 = time.time()
 
-    # Salvataggio locale: visibile nella cartella ./results del progetto
+    # Salvataggio locale: visibile nella cartella ./output del progetto
     save_csv(result, OUTPUT_NAME, local=True)
 
     # Salvataggio HDFS: utile per pipeline completa e Airflow

@@ -17,10 +17,10 @@ Per le compagnie AA (American Airlines), DL (Delta), UA (United), WN (Southwest)
       (solo voli non cancellati: DEP_DELAY è null sui cancellati comunque)
 
 Output:
-  - CSV locale  → /opt/results/query3_hourly_percentiles.csv
-                  /opt/results/query3_global_minmax.csv
-  - CSV su HDFS → /data/processed/flights/query3_hourly_percentiles
-                  /data/processed/flights/query3_global_minmax
+  - CSV locale  → /opt/output/query3_hourly_percentiles.csv
+                  /opt/output/query3_global_minmax.csv
+  - CSV su HDFS → /data/output/query3_hourly_percentiles
+                  /data/output/query3_global_minmax
 """
 
 import time

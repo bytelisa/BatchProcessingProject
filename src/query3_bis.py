@@ -23,10 +23,10 @@ Tecnica:
         pip install tdigest
 
 Output (stessi file di query3.py, con suffisso _tdigest):
-    - /opt/results/query3_bis_hourly_percentiles.csv
-    - /opt/results/query3_bis_global_minmax.csv
-    - HDFS: /data/processed/flights/query3_bis_hourly_percentiles
-    - HDFS: /data/processed/flights/query3_bis_global_minmax
+    - /opt/output/query3_bis_hourly_percentiles.csv
+    - /opt/output/query3_bis_global_minmax.csv
+    - HDFS: /data/output/query3_bis_hourly_percentiles
+    - HDFS: /data/output/query3_bis_global_minmax
 """
 
 import time

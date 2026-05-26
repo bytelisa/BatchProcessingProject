@@ -12,7 +12,7 @@ from pyspark.sql import functions as F
 HDFS_BASE       = "hdfs://namenode:9000"
 HDFS_CSV_PATH   = f"{HDFS_BASE}/data/raw/flights/csv/20250*_T_ONTIME_REPORTING.csv"
 HDFS_OUT_PATH   = f"{HDFS_BASE}/data/processed/flights"
-LOCAL_OUT_PATH  = "/opt/results"   # montato su ./results sul tuo PC
+LOCAL_OUT_PATH  = "/opt/output"   # montato su ./output sul tuo PC
 
 # ─────────────────────────────────────────────
 # SparkSession
@@ -99,7 +99,7 @@ def save_csv(df, filename: str, local: bool = True):
     Salva il DataFrame come CSV.
 
     - local=True:
-        salva un singolo file CSV locale in /opt/results/<filename>.csv
+        salva un singolo file CSV locale in /opt/output/<filename>.csv
         usando Python standard, non Spark writer.
         Questo evita problemi di chmod sui bind mount Windows/WSL.
 
