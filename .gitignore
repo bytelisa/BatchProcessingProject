@@ -15,7 +15,7 @@ __pycache__/
 
 airflow/logs/
 airflow/plugins/
-results/
+output/
 *.db
 *.log
 

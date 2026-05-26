@@ -46,7 +46,7 @@ services:
       - "7077:7077"
     volumes:
       - ./src:/opt/scripts        # ← src è nella stessa cartella del docker-compose
-      - ./results:/opt/results
+      - ./output:/opt/output
     networks:
       - sabd-net
 
@@ -64,7 +64,7 @@ services:
       - spark-master
     volumes:
       - ./src:/opt/scripts
-      - ./results:/opt/results
+      - ./output:/opt/output
     networks:
       - sabd-net
 
@@ -95,7 +95,6 @@ services:
     command: >
       redis-server
       --appendonly yes
-      --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     networks:
