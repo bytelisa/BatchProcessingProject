@@ -14,7 +14,12 @@ Per le compagnie AA (American Airlines), DL (Delta), UA (United), WN (Southwest)
   [CSV 2 — query3_global_minmax]
   - Per ciascuna compagnia:
       calcola il minimo e il massimo assoluto di DEP_DELAY sull'intero dataset
-      (solo voli non cancellati: DEP_DELAY è null sui cancellati comunque)
+
+Parametri di run_query3():
+  save_output   (bool, default True)  — se False salta la scrittura CSV;
+                usato dal benchmark per non inquinare i tempi di computazione
+  print_preview (bool, default True)  — se False salta result.show();
+                usato dal benchmark per non inquinare wall_total_s
 
 Output:
   - CSV locale  → /opt/output/query3_hourly_percentiles.csv
@@ -42,10 +47,7 @@ PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
 
 TARGET_AIRLINES = ["AA", "DL", "UA", "WN"]
 
-# Accuratezza per percentile_approx:
-# valori più alti → risultato più preciso ma più lento.
-# 1000 è un buon compromesso per ~2.2M righe.
-PERCENTILE_ACCURACY = 1000
+PERCENTILE_ACCURACY = 1000   # errore relativo ≤ 1/1000
 
 OUTPUT_PERCENTILES = "query3_hourly_percentiles"
 OUTPUT_MINMAX      = "query3_global_minmax"
@@ -55,15 +57,20 @@ OUTPUT_MINMAX      = "query3_global_minmax"
 # Core
 # ─────────────────────────────────────────────
 
-def run_query3(spark):
+def run_query3(spark, save_output=True, print_preview=True):
     """
     Esegue la Query 3 usando DataFrame API.
 
+    Parametri:
+      save_output   — se False salta la scrittura CSV (benchmark: misura
+                      solo loading + computation, non I/O su HDFS)
+      print_preview — se False salta result.show() a console
+                      (benchmark: evita di inquinare wall_total_s)
+
     Nota metodologica — scelta della tecnica per i percentili:
         Si usa F.percentile_approx, funzione nativa di Spark basata
-        sull'algoritmo Greenwald-Khanna (uno sketch per quantili approssimati).
-        È l'equivalente della famiglia t-digest/KLL sketch richiesta dal testo:
-        lavora in un singolo passaggio sui dati, non materializza l'intero
+        sull'algoritmo Greenwald-Khanna (sketch per quantili approssimati).
+        Lavora in un singolo passaggio sui dati, non materializza l'intero
         ordinamento, ed è progettata per dataset di grandi dimensioni.
         Il parametro accuracy=1000 garantisce un errore relativo ≤ 1/1000.
     """
@@ -86,7 +93,7 @@ def run_query3(spark):
         "CANCELLED",
     )
 
-    timings["loading_s"] = time.time() - t0
+    timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
     # ─────────────────────────────────────────────
@@ -101,26 +108,22 @@ def run_query3(spark):
         df
         .filter(F.col("OP_UNIQUE_CARRIER").isin(TARGET_AIRLINES))
         .filter(F.col("CANCELLED") == 0)
-        # DEP_DELAY nullo su voli non cancellati è un'anomalia del dataset:
-        # lo escludiamo per non distorcere i percentili.
         .filter(F.col("DEP_DELAY").isNotNull())
-        # Ricava l'ora dal campo HHMM intero (es. 1245 → 12, 830 → 8, 45 → 0)
         .withColumn(
             "HOUR",
             (F.col("CRS_DEP_TIME") / 100).cast(IntegerType())
         )
-        # Guardia: HOUR deve essere in [0, 23]. Valori corrotti (es. 2400) vengono scartati.
         .filter((F.col("HOUR") >= 0) & (F.col("HOUR") <= 23))
     )
 
-    # Cache: il DataFrame viene riusato per due aggregazioni distinte.
+    # Cache: il DataFrame viene riusato per due aggregazioni distinte
     df_filtered.cache()
 
-    timings["filtering_s"] = time.time() - t1
+    timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.2f}s")
 
     # ─────────────────────────────────────────────
-    # 3a. Aggregazione percentili per compagnia × ora
+    # 3a. Percentili per compagnia × ora
     # ─────────────────────────────────────────────
 
     print("\n[3a] Calcolo percentili P25/P50/P75/P90 per compagnia e fascia oraria...")
@@ -143,10 +146,9 @@ def run_query3(spark):
         .orderBy("airline", "hour")
     )
 
-    # Materializza per misurare il tempo
     count_percentiles = result_percentiles.count()
 
-    timings["computation_percentiles_s"] = time.time() - t2
+    timings["computation_percentiles_s"] = round(time.time() - t2, 3)
     print(f"    Calcolo percentili completato in {timings['computation_percentiles_s']:.2f}s")
     print(f"    Righe risultato: {count_percentiles}")
 
@@ -172,37 +174,45 @@ def run_query3(spark):
 
     count_minmax = result_minmax.count()
 
-    timings["computation_minmax_s"] = time.time() - t3
+    timings["computation_minmax_s"] = round(time.time() - t3, 3)
     print(f"    Calcolo min/max completato in {timings['computation_minmax_s']:.2f}s")
     print(f"    Righe risultato: {count_minmax}")
 
     # ─────────────────────────────────────────────
-    # 4. Output
+    # 4. Anteprima (opzionale)
     # ─────────────────────────────────────────────
 
-    print("\n[4a] Anteprima percentili (prime 30 righe):")
-    result_percentiles.show(30, truncate=False)
+    if print_preview:
+        print("\n[4a] Anteprima percentili (prime 30 righe):")
+        result_percentiles.show(30, truncate=False)
+        print("\n[4b] Anteprima min/max:")
+        result_minmax.show(truncate=False)
 
-    print("\n[4b] Anteprima min/max:")
-    result_minmax.show(truncate=False)
+    # ─────────────────────────────────────────────
+    # 5. Output CSV (opzionale)
+    #    Saltato durante il benchmark (save_output=False) per non
+    #    inquinare la misurazione con latenza I/O su HDFS.
+    # ─────────────────────────────────────────────
 
-    print("\n[5] Salvataggio CSV...")
+    if save_output:
+        print("\n[5] Salvataggio CSV...")
+        t4 = time.time()
+        save_csv(result_percentiles, OUTPUT_PERCENTILES, local=True)
+        save_csv(result_percentiles, OUTPUT_PERCENTILES, local=False)
+        save_csv(result_minmax, OUTPUT_MINMAX, local=True)
+        save_csv(result_minmax, OUTPUT_MINMAX, local=False)
+        timings["output_s"] = round(time.time() - t4, 3)
+        print(f"    Output completato in {timings['output_s']:.2f}s")
 
-    t4 = time.time()
-
-    save_csv(result_percentiles, OUTPUT_PERCENTILES, local=True)
-    save_csv(result_percentiles, OUTPUT_PERCENTILES, local=False)
-
-    save_csv(result_minmax, OUTPUT_MINMAX, local=True)
-    save_csv(result_minmax, OUTPUT_MINMAX, local=False)
-
-    timings["output_s"] = time.time() - t4
-    print(f"    Output completato in {timings['output_s']:.2f}s")
-
-    timings["total_s"] = sum(timings.values())
-
-    # Libera la cache
     df_filtered.unpersist()
+
+    timings["total_s"] = round(
+        timings["loading_s"] +
+        timings["filtering_s"] +
+        timings["computation_percentiles_s"] +
+        timings["computation_minmax_s"],
+        3
+    )
 
     return result_percentiles, result_minmax, timings
 
@@ -221,21 +231,21 @@ def main():
     spark = get_spark_session("SABD-Query3")
 
     try:
-        _, _, timings = run_query3(spark)
+        # Esecuzione standalone: save_output e print_preview entrambi True
+        _, _, timings = run_query3(spark, save_output=True, print_preview=True)
 
         total_elapsed = time.time() - total_start
 
         print("\n" + "=" * 72)
         print("TEMPI QUERY 3")
         print("=" * 72)
-        print(f"Loading:               {timings['loading_s']:.2f}s")
-        print(f"Filtering + cache:     {timings['filtering_s']:.2f}s")
-        print(f"Percentili (3a):       {timings['computation_percentiles_s']:.2f}s")
-        print(f"Min/Max (3b):          {timings['computation_minmax_s']:.2f}s")
-        print(f"Output:                {timings['output_s']:.2f}s")
-        print(f"Totale fasi:           {timings['total_s']:.2f}s")
-        print(f"Totale script:         {total_elapsed:.2f}s")
-
+        print(f"  Loading:               {timings['loading_s']:.3f}s")
+        print(f"  Filtering + cache:     {timings['filtering_s']:.3f}s")
+        print(f"  Percentili (3a):       {timings['computation_percentiles_s']:.3f}s")
+        print(f"  Min/Max (3b):          {timings['computation_minmax_s']:.3f}s")
+        print(f"  Output:                {timings.get('output_s', 0):.3f}s")
+        print(f"  Totale (no output):    {timings['total_s']:.3f}s")
+        print(f"  Totale script:         {total_elapsed:.3f}s")
         print("\n[✓] Query 3 completata correttamente")
 
     finally:
