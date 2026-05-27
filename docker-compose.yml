@@ -130,8 +130,6 @@ services:
 
   grafana:
     image: grafana/grafana:10.4.0
-    container_name: grafana
-    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
@@ -139,6 +137,7 @@ services:
       - GF_INSTALL_PLUGINS=redis-datasource
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning # configurazione automatica del data source Redis con redis.yml
     networks:
       - sabd-net
 

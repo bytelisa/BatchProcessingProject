@@ -1,0 +1,17 @@
+apiVersion: 1
+
+## Configurazione automatica data source Redis per Grafana.
+
+datasources:
+  - name: redis-datasource
+    type: redis-datasource
+    access: proxy
+    url: redis:6379
+    isDefault: false
+    editable: true
+    jsonData:
+      client: standalone
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
