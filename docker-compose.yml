@@ -87,14 +87,11 @@ services:
       - sabd-net
 
   redis:
-    image: redis:7.2
-    container_name: redis
-    restart: unless-stopped
+    image: redis/redis-stack-server:7.2.0-v10
+    hostname: redis
     ports:
       - "6379:6379"
-    command: >
-      redis-server
-      --appendonly yes
+
     volumes:
       - redis_data:/data
     networks:

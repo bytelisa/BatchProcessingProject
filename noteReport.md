@@ -25,3 +25,9 @@ secondo flow NiFi, coerentemente con il ruolo di NiFi come strumento di data mov
 NiFi usata non include un processor Redis record-native compatibile, la scrittura su Redis è delegata a uno script 
 Python invocato tramite ExecuteStreamCommand. NiFi mantiene il controllo del flow, delle dipendenze e della gestione 
 degli errori; lo script implementa solo il mapping specifico dal CSV aggregato alle strutture Redis usate da Grafana.
+
+## Redis come serving layer per la visualizzazione
+I risultati aggregati prodotti da Spark e salvati su HDFS vengono esportati in Redis Stack, usando RedisTimeSeries come 
+serving layer per Grafana. Per le metriche mensili di Q1, il timestamp rappresenta l’inizio del mese di aggregazione. 
+Redis non viene usato per il processamento analitico, ma solo per rendere disponibili a Grafana le metriche già 
+calcolate.
