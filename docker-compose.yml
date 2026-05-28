@@ -135,6 +135,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning # configurazione automatica del data source Redis con redis.yml
+      - ./grafana/dashboards:/etc/grafana/dashboards
     networks:
       - sabd-net
 

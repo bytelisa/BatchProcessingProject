@@ -1,0 +1,1145 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 2,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p25:AA",
+          "legend": "p25",
+          "query": "",
+          "refId": "p25",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p50:AA",
+          "legend": "p50",
+          "query": "",
+          "refId": "p50",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p75:AA",
+          "legend": "p75",
+          "query": "",
+          "refId": "p75",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p90:AA",
+          "legend": "p90",
+          "query": "",
+          "refId": "p90",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "American Airlines: Dep. Delay Percentiles per hour",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p25:UA",
+          "legend": "p25",
+          "query": "",
+          "refId": "p25",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p50:UA",
+          "legend": "p50",
+          "query": "",
+          "refId": "p50",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p75:UA",
+          "legend": "p75",
+          "query": "",
+          "refId": "p75",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p90:UA",
+          "legend": "p90",
+          "query": "",
+          "refId": "p90",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "United Airlines: Dep. Delay Percentiles per hour",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p25:WN",
+          "legend": "p25",
+          "query": "",
+          "refId": "p25",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p50:WN",
+          "legend": "p50",
+          "query": "",
+          "refId": "p50",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p75:WN",
+          "legend": "p75",
+          "query": "",
+          "refId": "p75",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p90:WN",
+          "legend": "p90",
+          "query": "",
+          "refId": "p90",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "Southwest Airlines: Dep. Delay Percentiles per hour",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p25:DL",
+          "legend": "p25",
+          "query": "",
+          "refId": "p25",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p50:DL",
+          "legend": "p50",
+          "query": "",
+          "refId": "p50",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p75:DL",
+          "legend": "p75",
+          "query": "",
+          "refId": "p75",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p90:DL",
+          "legend": "p90",
+          "query": "",
+          "refId": "p90",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "Delta Airlines: Dep. Delay Percentiles per hour",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": true,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "p50",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p25:AA",
+          "legend": "AA",
+          "query": "",
+          "refId": "AA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p25:DL",
+          "legend": "DL",
+          "query": "",
+          "refId": "DL",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p25:UA",
+          "legend": "UA",
+          "query": "",
+          "refId": "UA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p25:WN",
+          "legend": "WN",
+          "query": "",
+          "refId": "WN",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "25th Percentile comparison: AA, DL, WN, UA",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": true,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "p50",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p50:AA",
+          "legend": "AA",
+          "query": "",
+          "refId": "AA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p50:DL",
+          "legend": "DL",
+          "query": "",
+          "refId": "DL",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p50:UA",
+          "legend": "UA",
+          "query": "",
+          "refId": "UA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p50:WN",
+          "legend": "WN",
+          "query": "",
+          "refId": "WN",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "50th Percentile comparison: AA, DL, WN, UA",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": true,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "p50",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p75:AA",
+          "legend": "AA",
+          "query": "",
+          "refId": "AA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p75:DL",
+          "legend": "DL",
+          "query": "",
+          "refId": "DL",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p75:UA",
+          "legend": "UA",
+          "query": "",
+          "refId": "UA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p75:WN",
+          "legend": "WN",
+          "query": "",
+          "refId": "WN",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "75th Percentile comparison: AA, DL, WN, UA",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": true,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "p50",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q3:ts:p90:AA",
+          "legend": "AA",
+          "query": "",
+          "refId": "AA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p90:DL",
+          "legend": "DL",
+          "query": "",
+          "refId": "DL",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p90:UA",
+          "legend": "UA",
+          "query": "",
+          "refId": "UA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q3:ts:p90:WN",
+          "legend": "WN",
+          "query": "",
+          "refId": "WN",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "90th Percentile comparison: AA, DL, WN, UA",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "2024-12-31T23:00:00.000Z",
+    "to": "2025-01-01T23:00:00.000Z"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "[Q3] Statistics per hour: AA, DL, WN, UA",
+  "uid": "bfncoxbjzz18gb",
+  "version": 35,
+  "weekStart": ""
+}
