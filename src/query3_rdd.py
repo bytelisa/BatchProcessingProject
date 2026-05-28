@@ -1,37 +1,17 @@
 """
 query3_rdd.py
 ─────────────
-Query 3 - SABD Project 1 — Implementazione con RDD + approxQuantile nativa
+Query 3 - SABD Project 1 — Implementazione RDD + t-digest
 
-Per le compagnie AA, DL, UA, WN:
-
-  [CSV 1 — query3_rdd_hourly_percentiles]
-  - Ricava l'ora dal campo CRS_DEP_TIME (HHMM intero: 830→8, 1245→12)
-  - Per ciascuna compagnia × fascia oraria (0–23), sui soli voli non
-    cancellati, calcola P25, P50, P75, P90 di DEP_DELAY
-  - Tecnica: RDD groupByKey per partizionare i dati per (airline, hour),
-    poi approxQuantile di Spark (Greenwald-Khanna) su mini-DataFrame
-
-  [CSV 2 — query3_rdd_global_minmax]
-  - Per ciascuna compagnia: min e max assoluto di DEP_DELAY
-  - Tecnica: combineByKey su RDD
-
-Parametri di run_query3_rdd():
-  save_output   (bool, default True)  — se False salta la scrittura CSV
-  print_preview (bool, default True)  — se False salta la stampa dell'anteprima
-
-Output:
-- CSV locale  → /opt/results/query3_rdd_hourly_percentiles.csv
-                /opt/results/query3_rdd_global_minmax.csv
-- CSV su HDFS → hdfs://.../query3_rdd_hourly_percentiles/
-                hdfs://.../query3_rdd_global_minmax/
+Usa mapPartitions per costruire un TDigest locale per partizione,
+poi raccoglie i digest sul driver e li fonde con update_centroids_from_list.
+Tutto il codice t-digest è inline nelle lambda/funzioni di mapPartitions,
+evitando dipendenze da moduli esterni non disponibili sul worker.
 """
 
 import csv
 import os
 import time
-
-from pyspark.sql.types import DoubleType, StructType, StructField
 
 from utils import (
     get_spark_session,
@@ -48,7 +28,7 @@ PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
 
 TARGET_AIRLINES = {"AA", "DL", "UA", "WN"}
 
-RELATIVE_ERROR = 0.001   # stesso di query3.py (accuracy=1000)
+TDIGEST_DELTA = 0.01
 
 OUTPUT_PERCENTILES = "query3_rdd_hourly_percentiles"
 OUTPUT_MINMAX      = "query3_rdd_global_minmax"
@@ -61,11 +41,31 @@ LOCAL_OUTPUT_MM    = f"{LOCAL_OUT_PATH}/{OUTPUT_MINMAX}.csv"
 CSV_HEADER_PERC    = "airline,hour,num_flights,p25,p50,p75,p90"
 CSV_HEADER_MM      = "airline,min_delay,max_delay"
 
-DELAY_SCHEMA = StructType([StructField("DEP_DELAY", DoubleType(), True)])
+
+# ─────────────────────────────────────────────
+# Funzione mapPartitions: costruisce un dizionario
+# {(airline, hour): TDigest} per ogni partizione.
+# Tutto il codice t-digest è inline per evitare
+# problemi di serializzazione del modulo sul worker.
+# ─────────────────────────────────────────────
+
+def _build_digests_partition(iterator):
+    """
+    Riceve un iteratore di (airline, hour, dep_delay) per una partizione.
+    Restituisce una lista di ((airline, hour), TDigest).
+    """
+    from tdigest import TDigest
+    local = {}
+    for airline, hour, delay in iterator:
+        key = (airline, hour)
+        if key not in local:
+            local[key] = TDigest(delta=0.01)
+        local[key].update(delay)
+    return list(local.items())
 
 
 # ─────────────────────────────────────────────
-# Salvataggio RDD — nessun DataFrame coinvolto
+# Salvataggio
 # ─────────────────────────────────────────────
 
 def save_rdd_local(rows, filepath, header):
@@ -106,43 +106,36 @@ def save_rdd_hdfs(sc, rows, hdfs_path, header, row_to_str):
 
 def run_query3_rdd(spark, save_output=True, print_preview=True):
     """
-    Esegue la Query 3 con API RDD + approxQuantile nativa di Spark.
+    Esegue la Query 3 con API RDD + t-digest.
 
-    Parametri:
-      save_output   — se False salta la scrittura CSV (benchmark: misura
-                      solo loading + computation, non I/O su HDFS)
-      print_preview — se False salta la stampa dell'anteprima a console
-                      (benchmark: evita di inquinare wall_total_s)
+    Struttura:
 
-    Struttura in due rami:
-
-    ┌─────────────────────────────────────────────────────────────────┐
-    │  Ramo A — Percentili per (airline, hour)                        │
-    │  groupByKey → collect() → per gruppo: mini-DF + approxQuantile  │
-    └─────────────────────────────────────────────────────────────────┘
-    ┌─────────────────────────────────────────────────────────────────┐
-    │  Ramo B — Min/Max globali per airline                           │
-    │  combineByKey → aggrega (min,max) per partizione prima shuffle  │
-    └─────────────────────────────────────────────────────────────────┘
-
-    Nota: approxQuantile e percentile_approx usano lo stesso algoritmo
-    Greenwald-Khanna con lo stesso relative_error. La differenza è che
-    percentile_approx (DataFrame) costruisce lo sketch distribuito sugli
-    executor, mentre approxQuantile (qui) richiede collect() per gruppo
-    sul driver — overhead misurabile nel confronto dei tempi.
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  Ramo A — Percentili per (airline, hour)                         │
+    │  mapPartitions: ogni partizione costruisce i propri TDigest      │
+    │  reduceByKey: fonde i digest tra partizioni sul driver           │
+    │               tramite update_centroids_from_list                 │
+    │  collect + percentile(): estrae P25/P50/P75/P90                  │
+    └──────────────────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────────────────┐
+    │  Ramo B — Min/Max globali per airline                            │
+    │  combineByKey → aggrega (min, max) per partizione                │
+    └──────────────────────────────────────────────────────────────────┘
     """
 
     timings = {}
     sc = spark.sparkContext
 
     # ─────────────────────────────────────────────
-    # 1. Loading
+    # 1. Loading + Filtering
     # ─────────────────────────────────────────────
 
     print("\n[1] Lettura Parquet e conversione in RDD...")
     print(f"    Input path: {PARQUET_PATH}")
 
     t0 = time.time()
+
+    target = TARGET_AIRLINES   # closure locale, non importa il modulo
 
     rdd_base = (
         spark.read.parquet(PARQUET_PATH)
@@ -154,11 +147,11 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
             row["DEP_DELAY"],
             row["CANCELLED"],
         ))
-        .filter(lambda r: r[0] in TARGET_AIRLINES)
+        .filter(lambda r: r[0] in target)
         .filter(lambda r: r[3] == 0)
         .filter(lambda r: r[2] is not None)
         .filter(lambda r: r[1] is not None)
-        .map(lambda r: (r[0], int(r[1]) // 100, r[2]))   # (airline, hour, dep_delay)
+        .map(lambda r: (r[0], int(r[1]) // 100, r[2]))
         .filter(lambda r: 0 <= r[1] <= 23)
         .cache()
     )
@@ -167,36 +160,38 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
     # ─────────────────────────────────────────────
-    # 2a. Ramo A — Percentili con approxQuantile
+    # 2a. Ramo A — Percentili con t-digest
     # ─────────────────────────────────────────────
 
-    print("\n[2a] Calcolo percentili P25/P50/P75/P90 (groupByKey + approxQuantile)...")
-    print(f"     relative_error = {RELATIVE_ERROR}")
+    print("\n[2a] Calcolo percentili P25/P50/P75/P90 con t-digest...")
+    print(f"     delta = {TDIGEST_DELTA}")
 
     t1 = time.time()
 
-    groups = (
+    # Ogni partizione costruisce i propri TDigest localmente (mapPartitions).
+    # reduceByKey fonde i digest tra partizioni: porta sul driver solo oggetti
+    # TDigest compatti, non i dati raw.
+    def merge_digests(td1, td2):
+        td1.update_centroids_from_list(td2.centroids_to_list())
+        return td1
+
+    groups_with_digest = (
         rdd_base
-        .map(lambda r: ((r[0], r[1]), r[2]))
-        .groupByKey()
+        .mapPartitions(_build_digests_partition)   # [(key, TDigest), ...]
+        .reduceByKey(merge_digests)                # fonde digest tra partizioni
         .collect()
     )
 
     rows_percentiles = []
-    for (airline, hour), vals in groups:
-        delay_list = list(vals)
-        n = len(delay_list)
-        if n == 0:
+    for (airline, hour), td in groups_with_digest:
+        if td is None:
             rows_percentiles.append((airline, hour, 0, None, None, None, None))
             continue
-        mini_df = spark.createDataFrame(
-            [(float(v),) for v in delay_list],
-            schema=DELAY_SCHEMA
-        )
-        quantiles = mini_df.approxQuantile(
-            "DEP_DELAY", [0.25, 0.50, 0.75, 0.90], RELATIVE_ERROR
-        )
-        p25, p50, p75, p90 = (round(q, 4) for q in quantiles)
+        n   = int(td.n) if hasattr(td, 'n') else 0
+        p25 = round(td.percentile(25), 4)
+        p50 = round(td.percentile(50), 4)
+        p75 = round(td.percentile(75), 4)
+        p90 = round(td.percentile(90), 4)
         rows_percentiles.append((airline, hour, n, p25, p50, p75, p90))
 
     rows_percentiles.sort(key=lambda r: (r[0], r[1]))
@@ -251,12 +246,10 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
 
     # ─────────────────────────────────────────────
     # 4. Output CSV (opzionale)
-    #    Saltato durante il benchmark (save_output=False) per non
-    #    inquinare la misurazione con latenza I/O su HDFS.
     # ─────────────────────────────────────────────
 
     if save_output:
-        print("\n[4] Salvataggio CSV (RDD puro)...")
+        print("\n[4] Salvataggio CSV (RDD + t-digest)...")
         t3 = time.time()
 
         save_rdd_local(rows_percentiles, LOCAL_OUTPUT_PERC, CSV_HEADER_PERC)
@@ -286,26 +279,24 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
 
 
 # ─────────────────────────────────────────────
-# Main — esecuzione standalone
+# Main
 # ─────────────────────────────────────────────
 
 def main():
     print("=" * 72)
-    print("  SABD Project 1 - Query 3 RDD: approxQuantile Percentiles")
+    print("  SABD Project 1 - Query 3 RDD: t-digest Percentiles")
     print("=" * 72)
 
     total_start = time.time()
-
-    spark = get_spark_session("SABD-Query3-RDD")
+    spark = get_spark_session("SABD-Query3-RDD-tdigest")
 
     try:
-        # Esecuzione standalone: save_output e print_preview entrambi True
         _, _, timings = run_query3_rdd(spark, save_output=True, print_preview=True)
 
         total_elapsed = time.time() - total_start
 
         print("\n" + "=" * 72)
-        print("TEMPI QUERY 3 (RDD + approxQuantile)")
+        print("TEMPI QUERY 3 (RDD + t-digest)")
         print("=" * 72)
         print(f"  Loading:               {timings['loading_s']:.3f}s")
         print(f"  Percentili (2a):       {timings['computation_percentiles_s']:.3f}s")
@@ -313,7 +304,7 @@ def main():
         print(f"  Output:                {timings.get('output_s', 0):.3f}s")
         print(f"  Totale (no output):    {timings['total_s']:.3f}s")
         print(f"  Totale script:         {total_elapsed:.3f}s")
-        print("\n[✓] Query 3 RDD completata correttamente")
+        print("\n[✓] Query 3 RDD (t-digest) completata correttamente")
 
     finally:
         spark.stop()

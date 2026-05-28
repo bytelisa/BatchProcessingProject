@@ -11,7 +11,7 @@ Avvio dei container:
 ```bash
 docker-compose up -d
 docker-compose up -d namenode datanode nifi # per vale (solo nodi nifi, hadoop)
-docker compose up -d namenode datanode nifi spark-master spark-worker
+docker compose up -d namenode datanode spark-master spark-worker
 ```
 
 ## 2. Initialize HDFS directories and permits for NiFi
