@@ -11,7 +11,7 @@ Lo script:
 - seleziona solo le colonne originali utili alle query obbligatorie;
 - corregge i tipi delle colonne principali;
 - non crea colonne derivate;
-- non fa imputazioni;
+- imputa a 0 i valori null delle componenti di ritardo;
 - non elimina ritardi negativi;
 - non aggrega;
 - non esegue quality check completo;
@@ -96,6 +96,13 @@ PROCESSED_COLUMNS = [
     "LATE_AIRCRAFT_DELAY",
 ]
 
+DELAY_CAUSE_COLUMNS = [
+    "CARRIER_DELAY",
+    "WEATHER_DELAY",
+    "NAS_DELAY",
+    "SECURITY_DELAY",
+    "LATE_AIRCRAFT_DELAY",
+]
 
 def read_raw_csv(spark):
     print("\n[1] Reading raw CSV from HDFS")
@@ -121,6 +128,11 @@ def build_processed_dataframe(raw_df):
         .withColumn("DIVERTED", F.col("DIVERTED").cast("integer"))
         .filter(F.col("OP_UNIQUE_CARRIER").isNotNull())
     )
+
+    # Per Q2: i valori mancanti nelle componenti di ritardo vengono
+    # interpretati come assenza di contributo della relativa causa.
+    
+    df = df.fillna(0.0, subset=DELAY_CAUSE_COLUMNS)
 
     return df
 
