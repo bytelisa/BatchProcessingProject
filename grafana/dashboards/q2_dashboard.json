@@ -1,0 +1,265 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 4,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "displayMode": "basic",
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "command": "hgetall",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q2:chart:cause_abs:carrier_delay_mean",
+          "query": "",
+          "refId": "A",
+          "type": "command"
+        },
+        {
+          "command": "hgetall",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q2:chart:cause_abs:weather_delay_mean",
+          "query": "",
+          "refId": "B",
+          "type": "command"
+        },
+        {
+          "command": "hgetall",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q2:chart:cause_abs:nas_delay_mean",
+          "query": "",
+          "refId": "C",
+          "type": "command"
+        },
+        {
+          "command": "hgetall",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q2:chart:cause_abs:security_delay_mean",
+          "query": "",
+          "refId": "D",
+          "type": "command"
+        },
+        {
+          "command": "hgetall",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q2:chart:cause_abs:late_aircraft_delay_mean",
+          "query": "",
+          "refId": "E",
+          "type": "command"
+        }
+      ],
+      "title": "Panel Title",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "F9",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {}
+        }
+      ],
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 1,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "OH",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "command": "hgetall",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "field": "oh",
+          "keyName": "q2:chart:ranking_arrdelay_mean",
+          "query": "",
+          "refId": "A",
+          "type": "command"
+        }
+      ],
+      "title": "Top 10 Airline Rankings by Average Arrival Delay",
+      "type": "barchart"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "[Q2] Top 10 by average arrival delay and cause contributions",
+  "uid": "cfngowm85ff9ca",
+  "version": 3,
+  "weekStart": ""
+}
