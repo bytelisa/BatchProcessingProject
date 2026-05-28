@@ -19,7 +19,7 @@ Parametri di run_query1_rdd():
                 usato dal benchmark per non inquinare wall_total_s
 
 Output:
-- CSV locale  → /opt/results/query1_rdd_monthly_stats.csv
+- CSV locale  → /opt/output/query1_rdd_monthly_stats.csv
 - CSV su HDFS → hdfs://.../query1_rdd_monthly_stats/
 """
 

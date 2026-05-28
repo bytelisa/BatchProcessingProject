@@ -1,6 +1,6 @@
 """
-benchmark_rdd.py
-────────────────
+benchmark_rdd_vs_df.py
+──────────────────────
 Benchmark comparativo DataFrame vs RDD per le Query 1 e 3.
 
 Esegue ciascuna implementazione (DataFrame e RDD) per un numero
@@ -20,8 +20,17 @@ Scelte metodologiche:
   - Le stampe di anteprima a console sono disabilitate durante il benchmark
     (PRINT_PREVIEW = False) per non inquinare i tempi misurati.
 
+Confronto Q3 (DataFrame vs RDD):
+  - DataFrame (query3.py):  usa F.percentile_approx (Greenwald-Khanna sketch,
+    nativo Spark). Lo sketch è costruito interamente dagli executor, senza
+    collect di dati intermedi.
+  - RDD (query3_rdd.py):    usa t-digest (algoritmo a centroidi con densità
+    variabile). Ogni partizione costruisce un TDigest locale; i digest (oggetti
+    compatti) vengono poi fusi sul driver via merge(). Il collect porta solo
+    i digest, non i dati raw, ma introduce comunque un overhead misurabile.
+
 Utilizzo:
-    ./run.sh benchmark_rdd.py
+    ./run.sh benchmark_rdd_vs_df.py
 """
 
 import csv
@@ -38,13 +47,13 @@ TOTAL_ITERATIONS  = 20   # iterazioni totali per ogni implementazione
 WARMUP_ITERATIONS =  5   # iterazioni di warm-up escluse dalla statistica
 
 # Quali query benchmarkare: sottoinsieme di [1, 3]
-QUERIES_TO_RUN = [1]
+QUERIES_TO_RUN = [1, 3]
 
 # Disabilita preview a console per non inquinare i tempi
 PRINT_PREVIEW = False
 
 # Path del report CSV finale
-BENCHMARK_REPORT_PATH = "/opt/results/benchmark_rdd_vs_df_report.csv"
+BENCHMARK_REPORT_PATH = "/opt/output/benchmark_rdd_vs_df_report.csv"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Import runner delle query
@@ -61,8 +70,8 @@ if 1 in QUERIES_TO_RUN:
     from query1_rdd import run_query1_rdd
 
 if 3 in QUERIES_TO_RUN:
-    from query3     import run_query3
-    from query3_rdd import run_query3_rdd
+    from query3     import run_query3       # DataFrame + percentile_approx (Greenwald-Khanna)
+    from query3_rdd import run_query3_rdd   # RDD + t-digest
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +96,18 @@ def compute_stats(values):
         "min_s":    round(min(values),     3),
         "max_s":    round(max(values),     3),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Labels descrittivi per il report
+# ─────────────────────────────────────────────────────────────────────────────
+
+IMPL_LABELS = {
+    (1, "df"):  "Q1 DataFrame (groupBy+agg)",
+    (1, "rdd"): "Q1 RDD (reduceByKey)",
+    (3, "df"):  "Q3 DataFrame (percentile_approx / Greenwald-Khanna)",
+    (3, "rdd"): "Q3 RDD (t-digest, aggregateByKey)",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -138,7 +159,7 @@ def benchmark_one(query_id, impl, spark):
     Restituisce (collected_timings, stats_per_phase).
     collected_timings include anche end_to_end_s come campo aggiuntivo.
     """
-    label      = f"Query {query_id} [{impl.upper()}]"
+    label      = IMPL_LABELS.get((query_id, impl), f"Q{query_id} [{impl.upper()}]")
     sep        = "─" * 72
     valid_runs = TOTAL_ITERATIONS - WARMUP_ITERATIONS
 
@@ -255,7 +276,12 @@ def print_comparison(all_results):
         _, df_stats  = all_results[df_key]
         _, rdd_stats = all_results[rdd_key]
 
+        df_label  = IMPL_LABELS.get(df_key,  "DataFrame")
+        rdd_label = IMPL_LABELS.get(rdd_key, "RDD")
+
         print(f"\n  ── Query {query_id} ──────────────────────────────────────────────")
+        print(f"  DataFrame: {df_label}")
+        print(f"  RDD:       {rdd_label}")
         print(f"  {'Fase':<34} {'DF media':>10} {'RDD media':>10} "
               f"{'Delta':>10} {'Speedup':>10}")
         print(f"  {'─'*68}")
@@ -285,28 +311,38 @@ def save_report(all_results):
     """
     Scrive il report CSV con una riga per ogni (query, impl, phase).
     La colonna 'note' indica se la fase include output CSV o meno.
+    La colonna 'algorithm' documenta la tecnica usata per i percentili (Q3).
     """
     os.makedirs(os.path.dirname(BENCHMARK_REPORT_PATH), exist_ok=True)
 
+    ALGO_NOTE = {
+        (3, "df"):  "percentile_approx (Greenwald-Khanna, Spark native)",
+        (3, "rdd"): "t-digest (aggregateByKey, merge sul driver)",
+        (1, "df"):  "groupBy+agg",
+        (1, "rdd"): "reduceByKey",
+    }
+
     rows = []
     for (query_id, impl), (_, stats_per_phase) in all_results.items():
+        algo = ALGO_NOTE.get((query_id, impl), "")
         for phase, s in stats_per_phase.items():
             note = "includes_output" if phase in ("output_s", "end_to_end_s") \
                    else "computation_only"
             rows.append({
-                "query":    f"Q{query_id}",
-                "impl":     impl,
-                "phase":    phase,
-                "n":        s["n"],
-                "mean_s":   s["mean_s"],
-                "std_s":    s["std_s"],
-                "median_s": s["median_s"],
-                "min_s":    s["min_s"],
-                "max_s":    s["max_s"],
-                "note":     note,
+                "query":     f"Q{query_id}",
+                "impl":      impl,
+                "algorithm": algo,
+                "phase":     phase,
+                "n":         s["n"],
+                "mean_s":    s["mean_s"],
+                "std_s":     s["std_s"],
+                "median_s":  s["median_s"],
+                "min_s":     s["min_s"],
+                "max_s":     s["max_s"],
+                "note":      note,
             })
 
-    fieldnames = ["query", "impl", "phase", "n",
+    fieldnames = ["query", "impl", "algorithm", "phase", "n",
                   "mean_s", "std_s", "median_s", "min_s", "max_s", "note"]
 
     with open(BENCHMARK_REPORT_PATH, "w", newline="", encoding="utf-8") as f:
@@ -335,6 +371,10 @@ def main():
           f"(warm-up: {WARMUP_ITERATIONS}, valide: {valid})")
     print(f"  Scrittura CSV:      ogni iterazione valida")
     print(f"  Fasi misurate:      loading, computation, output, end_to_end")
+    print()
+    print("  Q3 — confronto algoritmi:")
+    print("    DataFrame → F.percentile_approx  (Greenwald-Khanna sketch, Spark native)")
+    print("    RDD       → t-digest              (centroidi, aggregateByKey + merge)")
     print("=" * 72)
 
     spark = get_spark_session("SABD-Benchmark-RDD-vs-DF")
