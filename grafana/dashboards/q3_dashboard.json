@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": 3,
   "links": [],
   "panels": [
     {
@@ -896,8 +896,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1034,8 +1033,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1138,8 +1136,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "[Q3] Statistics per hour: AA, DL, WN, UA",
+  "title": "[Q3] Hourly Statistics: AA, DL, WN, UA",
   "uid": "bfncoxbjzz18gb",
-  "version": 35,
+  "version": 2,
   "weekStart": ""
 }
