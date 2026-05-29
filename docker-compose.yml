@@ -125,6 +125,7 @@ services:
       - spark-master
       - spark-worker
       - nifi
+      - redis
     command: bash /opt/start.sh
     networks:
       - sabd-net
