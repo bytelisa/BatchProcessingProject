@@ -345,36 +345,44 @@ def export_q2(r: redis.Redis) -> None:
 
         total_causes = sum(cause_values.values())
 
-        # ─────────────────────────────────────────
-        # Grafico 1: ranking arrdelay medio
-        # ─────────────────────────────────────────
-        pipe.hset("q2:chart:ranking_arrdelay_mean", carrier, arrdelay_mean)
+        # Lista ordinata dei rank disponibili: 1..10
+        pipe.rpush("q2:ranks", rank)
         exported += 1
 
-        # Metadati utili per ordinamento/controllo
-        pipe.hset("q2:chart:rank", carrier, rank)
+        # Riga completa per rank.
+        # Simile a q1:row:* e q3:row:*.
+        row_key = f"q2:row:{rank}"
+        pipe.hset(
+            row_key,
+            mapping={
+                "rank": rank,
+                "carrier": carrier,
+                "num_flights": num_flights,
+                "arrdelay_mean": arrdelay_mean,
+                **cause_values,
+            },
+        )
         exported += 1
 
-        pipe.hset("q2:chart:num_flights", carrier, num_flights)
-        exported += 1
+        # Metriche per rank.
+        # field = rank, value = valore.
+        pipe.hset("q2:metric:carrier", rank, carrier)
+        pipe.hset("q2:metric:num_flights", rank, num_flights)
+        pipe.hset("q2:metric:arrdelay_mean", rank, arrdelay_mean)
+        exported += 3
 
-        # ─────────────────────────────────────────
-        # Grafico 2A: cause assolute
-        # ─────────────────────────────────────────
+        # Cause assolute: field = rank, value = media causa.
         for metric, value in cause_values.items():
-            pipe.hset(f"q2:chart:cause_abs:{metric}", carrier, value)
+            pipe.hset(f"q2:metric:cause_abs:{metric}", rank, value)
             exported += 1
 
-        # ─────────────────────────────────────────
-        # Grafico 2B: cause percentuali
-        # percentuale sul totale delle 5 cause
-        # ─────────────────────────────────────────
+        # Cause percentuali: field = rank, value = percentuale sul totale cause.
         for metric, value in cause_values.items():
             pct = 0.0
             if total_causes > 0:
                 pct = round((value / total_causes) * 100.0, 4)
 
-            pipe.hset(f"q2:chart:cause_pct:{metric}", carrier, pct)
+            pipe.hset(f"q2:metric:cause_pct:{metric}", rank, pct)
             exported += 1
 
     pipe.execute()
@@ -382,19 +390,13 @@ def export_q2(r: redis.Redis) -> None:
     print("[✓] Q2 esportata su Redis Stack")
     print(f"[INFO] Elementi scritti: {exported}")
     print("[INFO] Chiavi Q2 create:")
-    print("       q2:chart:ranking_arrdelay_mean")
-    print("       q2:chart:rank")
-    print("       q2:chart:num_flights")
-    print("       q2:chart:cause_abs:carrier_delay_mean")
-    print("       q2:chart:cause_abs:weather_delay_mean")
-    print("       q2:chart:cause_abs:nas_delay_mean")
-    print("       q2:chart:cause_abs:security_delay_mean")
-    print("       q2:chart:cause_abs:late_aircraft_delay_mean")
-    print("       q2:chart:cause_pct:carrier_delay_mean")
-    print("       q2:chart:cause_pct:weather_delay_mean")
-    print("       q2:chart:cause_pct:nas_delay_mean")
-    print("       q2:chart:cause_pct:security_delay_mean")
-    print("       q2:chart:cause_pct:late_aircraft_delay_mean")
+    print("       q2:ranks")
+    print("       q2:row:<rank>")
+    print("       q2:metric:carrier")
+    print("       q2:metric:num_flights")
+    print("       q2:metric:arrdelay_mean")
+    print("       q2:metric:cause_abs:<metric>")
+    print("       q2:metric:cause_pct:<metric>")
 
 # ─────────────────────────────────────────────
 # Q3 export
