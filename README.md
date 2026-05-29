@@ -40,10 +40,16 @@ docker compose exec namenode hdfs dfs -chmod -R 755 /data/raw/flights
 And for Spark as well:
 ```bash
 docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights
+docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights/csv
 docker compose exec namenode hdfs dfs -mkdir -p /data/output/flights
 
 docker compose exec namenode hdfs dfs -chmod -R 777 /data/processed
 docker compose exec namenode hdfs dfs -chmod -R 777 /data/output
+docker compose exec namenode hdfs dfs -chmod -R 777 /data/raw/flights/csv
+docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights
+docker compose exec namenode hdfs dfs -mkdir -p /data/output/flights
+docker compose exec namenode hdfs dfs -chmod -R 777 /data/processed/flights
+docker compose exec namenode hdfs dfs -chmod -R 777 /data/output/flights
 
 ```
 
@@ -137,3 +143,27 @@ dello sketch, restituendo valori decimali che non corrispondono a osservazioni r
 precisione, la differenza massima osservata tra i due metodi è inferiore a 1 minuto su tutti i quantili analizzati, 
 confermando che entrambi gli approcci sono adeguati per questo tipo di analisi.
 
+## Ripulire task airflow
+docker compose exec airflow airflow db shell
+
+UPDATE dag_run
+SET state = 'failed',
+    end_date = datetime('now')
+WHERE dag_id = 'sabd_project1_pipeline'
+  AND state IN ('running', 'queued');
+
+UPDATE task_instance
+SET state = 'failed',
+    end_date = datetime('now')
+WHERE dag_id = 'sabd_project1_pipeline'
+  AND state IN (
+    'running',
+    'queued',
+    'scheduled',
+    'up_for_retry',
+    'up_for_reschedule',
+    'deferred',
+    'restarting'
+  );
+
+.quit

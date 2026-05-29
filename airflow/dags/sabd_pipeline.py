@@ -25,7 +25,7 @@ import time
 
 # NiFi
 NIFI_BASE_URL = "http://nifi:9090/nifi-api"
-NIFI_PG_NAME  = "targz-from-url-to-csv-on-hdfs"
+NIFI_PG_NAME  = "sabd-ingest-flights-to-hdfs"
 
 # Nomi container Docker (verifica con: docker compose ps)
 NAMENODE_CONTAINER     = "batchprocessingproject-namenode-1"
@@ -137,37 +137,87 @@ def get_nifi_pg_id(pg_name: str) -> str:
 # ─────────────────────────────────────────────────────────────
 # Funzioni Python per i task NiFi
 # ─────────────────────────────────────────────────────────────
-
-def nifi_start_flow(**kwargs):
+def set_nifi_pg_state(pg_id: str, state: str) -> None:
     """
-    Avvia il Process Group NiFi tramite la REST API.
+    Imposta lo stato del Process Group NiFi.
+    state: RUNNING oppure STOPPED
     """
-    pg_id = get_nifi_pg_id(NIFI_PG_NAME)
-
-    # Recupera la revision corrente (obbligatoria per la PUT)
-    s = nifi_session()
-    url_pg = f"{NIFI_BASE_URL}/process-groups/{pg_id}"
-    resp = s.get(url_pg, timeout=10)
-    resp.raise_for_status()
-    revision = resp.json()["revision"]
-    s.close()
-
-    # Avvia il process group
     s = nifi_session()
     url_run = f"{NIFI_BASE_URL}/flow/process-groups/{pg_id}"
     payload = {
         "id": pg_id,
-        "state": "RUNNING",
+        "state": state,
         "disconnectedNodeAcknowledged": False,
     }
-    resp = s.put(url_run, json=payload, timeout=10)
+    resp = s.put(url_run, json=payload, timeout=15)
     resp.raise_for_status()
     s.close()
 
-    print(f"[NiFi] ✓ Flow avviato (HTTP {resp.status_code})")
+    print(f"[NiFi] Process Group {pg_id} impostato a {state} (HTTP {resp.status_code})")
+
+
+def get_nifi_pg_status(pg_id: str) -> dict:
+    """
+    Legge lo stato del Process Group NiFi.
+    """
+    s = nifi_session()
+    url_status = f"{NIFI_BASE_URL}/process-groups/{pg_id}"
+    resp = s.get(url_status, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    s.close()
+    return data
+
+
+def wait_nifi_pg_stopped(pg_id: str, timeout_seconds: int = 60) -> None:
+    """
+    Aspetta che tutti i processor del Process Group risultino stopped.
+    """
+    elapsed = 0
+
+    while elapsed < timeout_seconds:
+        data = get_nifi_pg_status(pg_id)
+        running = data["component"]["runningCount"]
+        stopped = data["component"]["stoppedCount"]
+        invalid = data["component"]["invalidCount"]
+
+        print(
+            f"[NiFi] Waiting STOPPED | running={running}, "
+            f"stopped={stopped}, invalid={invalid}"
+        )
+
+        if running == 0:
+            return
+
+        time.sleep(3)
+        elapsed += 3
+
+    raise TimeoutError(f"[NiFi] Timeout: Process Group {pg_id} non si è fermato")
+
+
+def nifi_start_flow(**kwargs):
+    """
+    Riavvia il Process Group NiFi tramite REST API.
+
+    Nota:
+    impostare RUNNING su un flow già RUNNING non rilancia l'ingestion.
+    Per rendere il task Airflow un vero trigger, facciamo STOPPED → RUNNING.
+    """
+    pg_id = get_nifi_pg_id(NIFI_PG_NAME)
+
+    print(f"[NiFi] Riavvio Process Group: {pg_id}")
+
+    set_nifi_pg_state(pg_id, "STOPPED")
+    wait_nifi_pg_stopped(pg_id, timeout_seconds=60)
+
+    # Piccola pausa per evitare race con lo scheduler interno NiFi
+    time.sleep(2)
+
+    set_nifi_pg_state(pg_id, "RUNNING")
+
+    print(f"[NiFi] ✓ Flow riavviato")
     print(f"[NiFi]   Process Group: {pg_id}")
 
-    # Salva l'ID nel XCom per i task successivi
     kwargs["ti"].xcom_push(key="nifi_pg_id", value=pg_id)
 
 
@@ -198,11 +248,32 @@ def nifi_wait_completion(**kwargs):
 
         # Check 1: quanti CSV ci sono su HDFS?
         result = subprocess.run(
-            ["docker", "exec", NAMENODE_CONTAINER,
-             "hdfs", "dfs", "-ls", HDFS_CSV_PATH],
-            capture_output=True, text=True
+            [
+                "docker", "exec", NAMENODE_CONTAINER,
+                "hdfs", "dfs", "-find", HDFS_CSV_PATH, "-name", "*.csv",
+            ],
+            capture_output=True,
+            text=True,
         )
-        csv_count = result.stdout.count(".csv")
+
+        if result.returncode != 0:
+            print("[HDFS] Errore durante controllo CSV")
+            print("[HDFS] stdout:", result.stdout)
+            print("[HDFS] stderr:", result.stderr)
+            csv_files = []
+        else:
+            csv_files = [
+                line.strip()
+                for line in result.stdout.splitlines()
+                if line.strip().endswith(".csv")
+            ]
+
+        csv_count = len(csv_files)
+
+        if csv_files:
+            print("[HDFS] CSV trovati:")
+            for f in csv_files:
+                print(f"  - {f}")
 
         # Check 2: quanti FlowFile sono ancora in coda?
         try:
@@ -347,6 +418,7 @@ with DAG(
     start_date=datetime(2026, 1, 1),
     schedule_interval=None,
     catchup=False,
+    max_active_runs=1,
     tags=["sabd", "spark", "nifi", "hdfs", "redis"],
 ) as dag:
 
