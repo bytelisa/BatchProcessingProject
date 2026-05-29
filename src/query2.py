@@ -28,15 +28,16 @@ from pyspark.sql import functions as F
 from utils import (
     get_spark_session,
     save_csv,
-    HDFS_BASE,
 )
+
+from config import HDFS_PROCESSED_PARQUET_PATH
+
+PARQUET_PATH = HDFS_PROCESSED_PARQUET_PATH
 
 
 # ─────────────────────────────────────────────
 # Costanti
 # ─────────────────────────────────────────────
-
-PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
 
 OUTPUT_ALL_AIRLINES = "query2_all_airlines_stats"
 OUTPUT_TOP10 = "query2_top10_arrival_delay"

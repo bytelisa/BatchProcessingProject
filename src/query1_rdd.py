@@ -29,7 +29,6 @@ import time
 
 from utils import (
     get_spark_session,
-    HDFS_BASE,
     LOCAL_OUT_PATH,
     HDFS_OUT_PATH,
 )
@@ -38,7 +37,9 @@ from utils import (
 # Costanti
 # ─────────────────────────────────────────────
 
-PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
+from config import HDFS_PROCESSED_PARQUET_PATH
+
+PARQUET_PATH = HDFS_PROCESSED_PARQUET_PATH
 OUTPUT_NAME  = "query1_rdd_monthly_stats"
 
 HDFS_OUTPUT  = f"{HDFS_OUT_PATH}/{OUTPUT_NAME}"

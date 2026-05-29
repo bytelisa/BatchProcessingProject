@@ -39,9 +39,17 @@ from utils import (
     HDFS_BASE,
 )
 
+""" 
+    Importiamo i path dal file di configurazione config.py
+"""
 
-RAW_CSV_PATH = f"{HDFS_BASE}/data/raw/flights/csv/20250*_T_ONTIME_REPORTING.csv"
-PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
+from config import (
+    HDFS_RAW_CSV_PATH,
+    HDFS_PROCESSED_PARQUET_PATH,
+)
+
+RAW_CSV_PATH = HDFS_RAW_CSV_PATH
+PARQUET_PATH = HDFS_PROCESSED_PARQUET_PATH
 
 
 RAW_FLIGHT_SCHEMA = StructType([

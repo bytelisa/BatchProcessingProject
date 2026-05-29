@@ -33,11 +33,12 @@ from pyspark.sql import functions as F
 from utils import (
     get_spark_session,
     save_csv,
-    HDFS_BASE,
 )
 
 
-PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
+from config import HDFS_PROCESSED_PARQUET_PATH
+
+PARQUET_PATH = HDFS_PROCESSED_PARQUET_PATH
 
 OUTPUT_NAME = "query1_monthly_stats"
 

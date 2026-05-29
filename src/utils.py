@@ -6,14 +6,19 @@ from pyspark.sql.types import (
 from pyspark.sql import functions as F
 
 # ─────────────────────────────────────────────
-# Costanti
+# Importa i path dal file config.py
 # ─────────────────────────────────────────────
 
-HDFS_BASE       = "hdfs://namenode:9000"
-HDFS_CSV_PATH   = f"{HDFS_BASE}/data/raw/flights/csv/20250*_T_ONTIME_REPORTING.csv"
-HDFS_OUT_PATH   = f"{HDFS_BASE}/data/processed/flights"
-LOCAL_OUT_PATH  = "/opt/output"   # montato su ./output sul tuo PC
+from config import (
+    HDFS_BASE,
+    HDFS_RAW_CSV_PATH,
+    HDFS_QUERY_OUTPUT_PATH,
+    LOCAL_OUTPUT_PATH,
+)
 
+HDFS_CSV_PATH = HDFS_RAW_CSV_PATH
+HDFS_OUT_PATH = HDFS_QUERY_OUTPUT_PATH
+LOCAL_OUT_PATH = LOCAL_OUTPUT_PATH
 # ─────────────────────────────────────────────
 # SparkSession
 # ─────────────────────────────────────────────
@@ -104,8 +109,7 @@ def save_csv(df, filename: str, local: bool = True):
         Questo evita problemi di chmod sui bind mount Windows/WSL.
 
     - local=False:
-        salva su HDFS in /data/processed/flights/<filename>
-        usando Spark writer.
+        salva su HDFS in /data/output/flights/<filename>
 
     Nota:
     local=True è pensato per risultati aggregati piccoli, come Q1/Q2/Q3.

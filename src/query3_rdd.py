@@ -22,16 +22,18 @@ import time
 
 from utils import (
     get_spark_session,
-    HDFS_BASE,
     LOCAL_OUT_PATH,
     HDFS_OUT_PATH,
 )
 
+from config import HDFS_PROCESSED_PARQUET_PATH
+
+PARQUET_PATH = HDFS_PROCESSED_PARQUET_PATH
 # ─────────────────────────────────────────────
 # Costanti
 # ─────────────────────────────────────────────
 
-PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
+
 
 TARGET_AIRLINES = {"AA", "DL", "UA", "WN"}
 

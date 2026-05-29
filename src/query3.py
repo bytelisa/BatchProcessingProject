@@ -36,14 +36,15 @@ from pyspark.sql.types import IntegerType
 from utils import (
     get_spark_session,
     save_csv,
-    HDFS_BASE,
 )
+
+from config import HDFS_PROCESSED_PARQUET_PATH
+
+PARQUET_PATH = HDFS_PROCESSED_PARQUET_PATH
 
 # ─────────────────────────────────────────────
 # Costanti
 # ─────────────────────────────────────────────
-
-PARQUET_PATH = f"{HDFS_BASE}/data/processed/flights/parquet"
 
 TARGET_AIRLINES = ["AA", "DL", "UA", "WN"]
 
