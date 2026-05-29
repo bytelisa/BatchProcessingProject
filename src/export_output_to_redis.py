@@ -3,38 +3,40 @@ export_output_to_redis.py
 ─────────────────────────
 Esporta gli output CSV delle query su Redis Stack per Grafana.
 
+Supporta due sorgenti:
+- local: legge i CSV dalla cartella locale output/
+- hdfs: legge le directory CSV Spark da HDFS usando SparkSession
+
 Q1:
-- mantiene la logica dello script export_q1_to_redis.py
-- esporta:
-    q1:row:<airline>:<month>
-    q1:metric:<metric>:<airline>
-    q1:ts:<metric>:<airline>
+- q1:row:<airline>:<month>
+- q1:metric:<metric>:<airline>
+- q1:ts:<metric>:<airline>
 
 Q2:
-- esporta solo query2_top10_arrival_delay.csv
-- usa una logica minimale orientata ai grafici Grafana:
-    q2:top10:carriers
-    q2:ranking:arrdelay_mean
-    q2:metric:num_flights
-    q2:cause:<delay_cause_metric>
+- q2:ranks
+- q2:row:<rank>
+- q2:metric:carrier
+- q2:metric:num_flights
+- q2:metric:arrdelay_mean
+- q2:metric:cause_abs:<metric>
+- q2:metric:cause_pct:<metric>
 
 Q3:
-- mantiene la logica dello script export_q3_to_redis.py
-- esporta:
-    q3:row:hourly:<airline>:<hour>
-    q3:metric:<metric>:<airline>
-    q3:ts:<metric>:<airline>
-    q3:minmax:<airline>
-    q3:metric:min_delay
-    q3:metric:max_delay
+- q3:row:hourly:<airline>:<hour>
+- q3:metric:<metric>:<airline>
+- q3:ts:<metric>:<airline>
+- q3:minmax:<airline>
+- q3:metric:min_delay
+- q3:metric:max_delay
 """
 
 import csv
 import os
 import sys
 from datetime import datetime, timezone, timedelta
-from pyspark.sql import SparkSession
+
 import redis
+from pyspark.sql import SparkSession
 
 
 # ─────────────────────────────────────────────
@@ -44,6 +46,7 @@ import redis
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") or None
+
 
 # ─────────────────────────────────────────────
 # Input source: local oppure hdfs
@@ -55,13 +58,13 @@ HDFS_BASE = os.getenv("HDFS_BASE", "hdfs://namenode:9000")
 
 HDFS_QUERY_OUTPUT_PATH = os.getenv(
     "HDFS_QUERY_OUTPUT_PATH",
-    f"{HDFS_BASE}/data/output/flights",
+    HDFS_BASE + "/data/output/flights",
 )
 
 LOCAL_OUTPUT_PATH = os.getenv("LOCAL_OUTPUT_PATH", "output")
 
 
-def default_path(local_name: str, hdfs_dir_name: str) -> str:
+def default_path(local_name, hdfs_dir_name):
     """
     Restituisce il path corretto in base a EXPORT_SOURCE.
 
@@ -72,9 +75,9 @@ def default_path(local_name: str, hdfs_dir_name: str) -> str:
       hdfs://namenode:9000/data/output/flights/query1_monthly_stats
     """
     if EXPORT_SOURCE == "hdfs":
-        return f"{HDFS_QUERY_OUTPUT_PATH}/{hdfs_dir_name}"
+        return HDFS_QUERY_OUTPUT_PATH + "/" + hdfs_dir_name
 
-    return f"{LOCAL_OUTPUT_PATH}/{local_name}"
+    return LOCAL_OUTPUT_PATH + "/" + local_name
 
 
 # ─────────────────────────────────────────────
@@ -100,6 +103,7 @@ Q3_MINMAX_CSV_PATH = os.getenv(
     "Q3_MINMAX_CSV_PATH",
     default_path("query3_global_minmax.csv", "query3_global_minmax"),
 )
+
 
 # ─────────────────────────────────────────────
 # Q1 constants
@@ -169,7 +173,7 @@ Q3_ALL_HOURLY_METRICS = Q3_OTHER_HOURLY_METRICS + Q3_PERCENTILE_METRICS
 # Utility generali
 # ─────────────────────────────────────────────
 
-def connect_redis() -> redis.Redis:
+def connect_redis():
     r = redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
@@ -180,21 +184,31 @@ def connect_redis() -> redis.Redis:
     try:
         r.ping()
     except redis.RedisError as e:
-        print(f"[ERROR] Impossibile connettersi a Redis {REDIS_HOST}:{REDIS_PORT}")
+        print("[ERROR] Impossibile connettersi a Redis " + REDIS_HOST + ":" + str(REDIS_PORT))
         print(e)
         sys.exit(1)
 
-    print(f"[INFO] Connesso a Redis: {REDIS_HOST}:{REDIS_PORT}")
+    print("[INFO] Connesso a Redis: " + REDIS_HOST + ":" + str(REDIS_PORT))
     return r
 
 
-def require_file(path: str) -> None:
+def require_file(path):
+    """
+    Valida l'esistenza del file solo in modalità locale.
+
+    In modalità HDFS non si può usare os.path.exists() su path hdfs://...
+    perché il file è una directory Spark su HDFS, non un path locale.
+    La validazione avviene implicitamente quando Spark prova a leggere il CSV.
+    """
+    if EXPORT_SOURCE == "hdfs":
+        return
+
     if not os.path.exists(path):
-        print(f"[ERROR] File non trovato: {path}")
+        print("[ERROR] File non trovato: " + path)
         sys.exit(1)
 
 
-def load_csv_rows(path: str, spark: SparkSession | None = None) -> list[dict]:
+def load_csv_rows(path, spark=None):
     """
     Legge un CSV da file locale oppure da directory HDFS.
 
@@ -208,7 +222,7 @@ def load_csv_rows(path: str, spark: SparkSession | None = None) -> list[dict]:
         if spark is None:
             raise ValueError("SparkSession richiesta per leggere CSV da HDFS")
 
-        print(f"[INFO] Lettura CSV da HDFS: {path}")
+        print("[INFO] Lettura CSV da HDFS: " + path)
 
         df = (
             spark.read
@@ -217,19 +231,18 @@ def load_csv_rows(path: str, spark: SparkSession | None = None) -> list[dict]:
             .csv(path)
         )
 
-        rows = [
-            {
-                key: "" if value is None else str(value)
-                for key, value in row.asDict().items()
-            }
-            for row in df.collect()
-        ]
+        rows = []
+        for row in df.collect():
+            row_dict = {}
+            for key, value in row.asDict().items():
+                row_dict[key] = "" if value is None else str(value)
+            rows.append(row_dict)
 
     else:
-        print(f"[INFO] Lettura CSV locale: {path}")
+        print("[INFO] Lettura CSV locale: " + path)
 
         if not os.path.exists(path):
-            print(f"[ERROR] File non trovato: {path}")
+            print("[ERROR] File non trovato: " + path)
             sys.exit(1)
 
         with open(path, newline="", encoding="utf-8") as f:
@@ -237,36 +250,36 @@ def load_csv_rows(path: str, spark: SparkSession | None = None) -> list[dict]:
             rows = list(reader)
 
     if not rows:
-        print(f"[ERROR] CSV vuoto: {path}")
+        print("[ERROR] CSV vuoto: " + path)
         sys.exit(1)
 
     return rows
 
 
-def require_columns(rows: list[dict], required_columns: set[str], csv_path: str) -> None:
+def require_columns(rows, required_columns, csv_path):
     found_columns = set(rows[0].keys())
     missing_columns = required_columns - found_columns
 
     if missing_columns:
-        print(f"[ERROR] Colonne mancanti in {csv_path}: {sorted(missing_columns)}")
-        print(f"[INFO] Colonne trovate: {list(rows[0].keys())}")
+        print("[ERROR] Colonne mancanti in " + csv_path + ": " + str(sorted(missing_columns)))
+        print("[INFO] Colonne trovate: " + str(list(rows[0].keys())))
         sys.exit(1)
 
 
-def delete_keys_by_prefix(r: redis.Redis, prefix: str) -> int:
-    keys = list(r.scan_iter(f"{prefix}:*"))
+def delete_keys_by_prefix(r, prefix):
+    keys = list(r.scan_iter(prefix + ":*"))
     if keys:
         r.delete(*keys)
     return len(keys)
 
 
-def to_float(value) -> float:
+def to_float(value):
     if value is None or value == "":
         return 0.0
     return float(value)
 
 
-def to_int(value) -> int:
+def to_int(value):
     if value is None or value == "":
         return 0
     return int(float(value))
@@ -274,10 +287,9 @@ def to_int(value) -> int:
 
 # ─────────────────────────────────────────────
 # Q1 export
-# Logica mantenuta dallo script originale
 # ─────────────────────────────────────────────
 
-def q1_ts_create_if_needed(pipe, key: str, metric: str, airline: str):
+def q1_ts_create_if_needed(pipe, key, metric, airline):
     """
     Crea una TimeSeries se non esiste già.
     DUPLICATE_POLICY LAST permette di sovrascrivere lo stesso timestamp.
@@ -297,29 +309,28 @@ def q1_ts_create_if_needed(pipe, key: str, metric: str, airline: str):
     )
 
 
-def export_q1(r: redis.Redis, spark: SparkSession | None = None) -> None:
+def export_q1(r, spark=None):
     print("\n" + "=" * 72)
     print("EXPORT Q1")
     print("=" * 72)
 
-    print(f"[INFO] Lettura CSV Q1: {Q1_CSV_PATH}")
+    print("[INFO] Lettura CSV Q1: " + Q1_CSV_PATH)
 
     rows = load_csv_rows(Q1_CSV_PATH, spark)
 
-    required_columns = {"month", "airline", *Q1_METRICS}
+    required_columns = set(["month", "airline"] + Q1_METRICS)
     require_columns(rows, required_columns, Q1_CSV_PATH)
 
     deleted = delete_keys_by_prefix(r, "q1")
-    print(f"[INFO] Eliminate {deleted} chiavi q1:* precedenti")
+    print("[INFO] Eliminate " + str(deleted) + " chiavi q1:* precedenti")
 
-    airlines = sorted({row["airline"] for row in rows})
+    airlines = sorted(set(row["airline"] for row in rows))
 
     pipe = r.pipeline(transaction=False)
 
-    # Crea le serie temporali per ogni metrica/compagnia.
     for airline in airlines:
         for metric in Q1_METRICS:
-            ts_key = f"q1:ts:{metric}:{airline}"
+            ts_key = "q1:ts:" + metric + ":" + airline
             q1_ts_create_if_needed(pipe, ts_key, metric, airline)
 
     pipe.execute()
@@ -332,35 +343,33 @@ def export_q1(r: redis.Redis, spark: SparkSession | None = None) -> None:
         airline = row["airline"]
 
         if month not in MONTH_TIMESTAMPS_MS:
-            raise ValueError(f"Mese non valido per Q1: {month}")
+            raise ValueError("Mese non valido per Q1: " + str(month))
 
         timestamp_ms = MONTH_TIMESTAMPS_MS[month]
 
-        # Hash per debug/ispezione.
-        row_key = f"q1:row:{airline}:{month}"
-        pipe.hset(
-            row_key,
-            mapping={
-                "month": month,
-                "airline": airline,
-                **{metric: float(row[metric]) for metric in Q1_METRICS},
-            },
-        )
+        row_mapping = {
+            "month": month,
+            "airline": airline,
+        }
+
+        for metric in Q1_METRICS:
+            row_mapping[metric] = float(row[metric])
+
+        row_key = "q1:row:" + airline + ":" + str(month)
+        pipe.hset(row_key, mapping=row_mapping)
         exported += 1
 
-        # Hash per metrica, ancora utile per debug rapido.
         for metric in Q1_METRICS:
             pipe.hset(
-                f"q1:metric:{metric}:{airline}",
+                "q1:metric:" + metric + ":" + airline,
                 str(month),
                 float(row[metric]),
             )
             exported += 1
 
-            # TimeSeries per Grafana.
             pipe.execute_command(
                 "TS.ADD",
-                f"q1:ts:{metric}:{airline}",
+                "q1:ts:" + metric + ":" + airline,
                 timestamp_ms,
                 float(row[metric]),
                 "ON_DUPLICATE",
@@ -371,25 +380,25 @@ def export_q1(r: redis.Redis, spark: SparkSession | None = None) -> None:
     pipe.execute()
 
     print("[✓] Q1 esportata su Redis Stack")
-    print(f"[INFO] Elementi scritti: {exported}")
+    print("[INFO] Elementi scritti: " + str(exported))
 
 
 # ─────────────────────────────────────────────
 # Q2 export
 # ─────────────────────────────────────────────
 
-def export_q2(r: redis.Redis, spark: SparkSession | None = None) -> None:
+def export_q2(r, spark=None):
     print("\n" + "=" * 72)
     print("EXPORT Q2")
     print("=" * 72)
 
-    print(f"[INFO] Lettura CSV Q2 top 10: {Q2_TOP10_CSV_PATH}")
+    print("[INFO] Lettura CSV Q2 top 10: " + Q2_TOP10_CSV_PATH)
 
     rows = load_csv_rows(Q2_TOP10_CSV_PATH, spark)
     require_columns(rows, Q2_REQUIRED_COLUMNS, Q2_TOP10_CSV_PATH)
 
     deleted = delete_keys_by_prefix(r, "q2")
-    print(f"[INFO] Eliminate {deleted} chiavi q2:* precedenti")
+    print("[INFO] Eliminate " + str(deleted) + " chiavi q2:* precedenti")
 
     pipe = r.pipeline(transaction=False)
     exported = 0
@@ -410,50 +419,44 @@ def export_q2(r: redis.Redis, spark: SparkSession | None = None) -> None:
 
         total_causes = sum(cause_values.values())
 
-        # Lista ordinata dei rank disponibili: 1..10
         pipe.rpush("q2:ranks", rank)
         exported += 1
 
-        # Riga completa per rank.
-        # Simile a q1:row:* e q3:row:*.
-        row_key = f"q2:row:{rank}"
-        pipe.hset(
-            row_key,
-            mapping={
-                "rank": rank,
-                "carrier": carrier,
-                "num_flights": num_flights,
-                "arrdelay_mean": arrdelay_mean,
-                **cause_values,
-            },
-        )
+        row_key = "q2:row:" + str(rank)
+        row_mapping = {
+            "rank": rank,
+            "carrier": carrier,
+            "num_flights": num_flights,
+            "arrdelay_mean": arrdelay_mean,
+        }
+
+        for metric, value in cause_values.items():
+            row_mapping[metric] = value
+
+        pipe.hset(row_key, mapping=row_mapping)
         exported += 1
 
-        # Metriche per rank.
-        # field = rank, value = valore.
         pipe.hset("q2:metric:carrier", rank, carrier)
         pipe.hset("q2:metric:num_flights", rank, num_flights)
         pipe.hset("q2:metric:arrdelay_mean", rank, arrdelay_mean)
         exported += 3
 
-        # Cause assolute: field = rank, value = media causa.
         for metric, value in cause_values.items():
-            pipe.hset(f"q2:metric:cause_abs:{metric}", rank, value)
+            pipe.hset("q2:metric:cause_abs:" + metric, rank, value)
             exported += 1
 
-        # Cause percentuali: field = rank, value = percentuale sul totale cause.
         for metric, value in cause_values.items():
             pct = 0.0
             if total_causes > 0:
                 pct = round((value / total_causes) * 100.0, 4)
 
-            pipe.hset(f"q2:metric:cause_pct:{metric}", rank, pct)
+            pipe.hset("q2:metric:cause_pct:" + metric, rank, pct)
             exported += 1
 
     pipe.execute()
 
     print("[✓] Q2 esportata su Redis Stack")
-    print(f"[INFO] Elementi scritti: {exported}")
+    print("[INFO] Elementi scritti: " + str(exported))
     print("[INFO] Chiavi Q2 create:")
     print("       q2:ranks")
     print("       q2:row:<rank>")
@@ -463,12 +466,12 @@ def export_q2(r: redis.Redis, spark: SparkSession | None = None) -> None:
     print("       q2:metric:cause_abs:<metric>")
     print("       q2:metric:cause_pct:<metric>")
 
+
 # ─────────────────────────────────────────────
 # Q3 export
-# Logica mantenuta dallo script originale
 # ─────────────────────────────────────────────
 
-def q3_hour_to_timestamp_ms(hour: int) -> int:
+def q3_hour_to_timestamp_ms(hour):
     """
     Converte l'ora 0-23 in timestamp fittizio.
 
@@ -477,15 +480,13 @@ def q3_hour_to_timestamp_ms(hour: int) -> int:
       hour=1  -> 2025-01-01 01:00
       ...
       hour=23 -> 2025-01-01 23:00
-
-    Questo serve solo per visualizzare in Grafana una curva oraria.
     """
     base = datetime(2025, 1, 1, tzinfo=timezone.utc)
     ts = base + timedelta(hours=hour)
     return int(ts.timestamp() * 1000)
 
 
-def q3_create_timeseries_if_needed(pipe, key: str, metric: str, airline: str):
+def q3_create_timeseries_if_needed(pipe, key, metric, airline):
     """
     Crea una serie RedisTimeSeries.
 
@@ -507,7 +508,7 @@ def q3_create_timeseries_if_needed(pipe, key: str, metric: str, airline: str):
     )
 
 
-def export_q3_hourly_percentiles(r: redis.Redis, rows: list[dict]) -> int:
+def export_q3_hourly_percentiles(r, rows):
     required_columns = {
         "airline",
         "hour",
@@ -520,14 +521,13 @@ def export_q3_hourly_percentiles(r: redis.Redis, rows: list[dict]) -> int:
 
     require_columns(rows, required_columns, Q3_PERCENTILES_CSV_PATH)
 
-    airlines = sorted({row["airline"] for row in rows})
+    airlines = sorted(set(row["airline"] for row in rows))
 
     pipe = r.pipeline(transaction=False)
 
-    # Crea una TimeSeries per ogni compagnia e metrica oraria.
     for airline in airlines:
         for metric in Q3_ALL_HOURLY_METRICS:
-            ts_key = f"q3:ts:{metric}:{airline}"
+            ts_key = "q3:ts:" + metric + ":" + airline
             q3_create_timeseries_if_needed(pipe, ts_key, metric, airline)
 
     pipe.execute()
@@ -540,12 +540,11 @@ def export_q3_hourly_percentiles(r: redis.Redis, rows: list[dict]) -> int:
         hour = int(row["hour"])
 
         if hour < 0 or hour > 23:
-            raise ValueError(f"Ora non valida in Q3: {hour}")
+            raise ValueError("Ora non valida in Q3: " + str(hour))
 
         timestamp_ms = q3_hour_to_timestamp_ms(hour)
 
-        # Hash per debug/ispezione: una riga per compagnia × ora.
-        row_key = f"q3:row:hourly:{airline}:{hour}"
+        row_key = "q3:row:hourly:" + airline + ":" + str(hour)
         pipe.hset(
             row_key,
             mapping={
@@ -560,21 +559,19 @@ def export_q3_hourly_percentiles(r: redis.Redis, rows: list[dict]) -> int:
         )
         exported += 1
 
-        # Hash per metrica/compagnia: field=hour, value=metric.
         for metric in Q3_ALL_HOURLY_METRICS:
             value = float(row[metric])
 
             pipe.hset(
-                f"q3:metric:{metric}:{airline}",
+                "q3:metric:" + metric + ":" + airline,
                 str(hour),
                 value,
             )
             exported += 1
 
-            # TimeSeries per Grafana.
             pipe.execute_command(
                 "TS.ADD",
-                f"q3:ts:{metric}:{airline}",
+                "q3:ts:" + metric + ":" + airline,
                 timestamp_ms,
                 value,
                 "ON_DUPLICATE",
@@ -586,7 +583,7 @@ def export_q3_hourly_percentiles(r: redis.Redis, rows: list[dict]) -> int:
     return exported
 
 
-def export_q3_global_minmax(r: redis.Redis, rows: list[dict]) -> int:
+def export_q3_global_minmax(r, rows):
     required_columns = {
         "airline",
         "min_delay",
@@ -603,9 +600,8 @@ def export_q3_global_minmax(r: redis.Redis, rows: list[dict]) -> int:
         min_delay = float(row["min_delay"])
         max_delay = float(row["max_delay"])
 
-        # Hash per compagnia.
         pipe.hset(
-            f"q3:minmax:{airline}",
+            "q3:minmax:" + airline,
             mapping={
                 "airline": airline,
                 "min_delay": min_delay,
@@ -614,7 +610,6 @@ def export_q3_global_minmax(r: redis.Redis, rows: list[dict]) -> int:
         )
         exported += 1
 
-        # Hash per metrica: utile per controlli rapidi e grafici semplici.
         pipe.hset("q3:metric:min_delay", airline, min_delay)
         pipe.hset("q3:metric:max_delay", airline, max_delay)
         exported += 2
@@ -623,7 +618,7 @@ def export_q3_global_minmax(r: redis.Redis, rows: list[dict]) -> int:
     return exported
 
 
-def export_q3(r: redis.Redis, spark: SparkSession | None = None) -> None:
+def export_q3(r, spark=None):
     print("\n" + "=" * 72)
     print("EXPORT Q3")
     print("=" * 72)
@@ -631,11 +626,11 @@ def export_q3(r: redis.Redis, spark: SparkSession | None = None) -> None:
     require_file(Q3_PERCENTILES_CSV_PATH)
     require_file(Q3_MINMAX_CSV_PATH)
 
-    print(f"[INFO] Lettura CSV percentili: {Q3_PERCENTILES_CSV_PATH}")
-    print(f"[INFO] Lettura CSV min/max:    {Q3_MINMAX_CSV_PATH}")
+    print("[INFO] Lettura CSV percentili: " + Q3_PERCENTILES_CSV_PATH)
+    print("[INFO] Lettura CSV min/max:    " + Q3_MINMAX_CSV_PATH)
 
     deleted = delete_keys_by_prefix(r, "q3")
-    print(f"[INFO] Eliminate {deleted} chiavi q3:* precedenti")
+    print("[INFO] Eliminate " + str(deleted) + " chiavi q3:* precedenti")
 
     percentile_rows = load_csv_rows(Q3_PERCENTILES_CSV_PATH, spark)
     minmax_rows = load_csv_rows(Q3_MINMAX_CSV_PATH, spark)
@@ -644,8 +639,8 @@ def export_q3(r: redis.Redis, spark: SparkSession | None = None) -> None:
     exported_minmax = export_q3_global_minmax(r, minmax_rows)
 
     print("[✓] Q3 esportata su Redis Stack")
-    print(f"[INFO] Elementi orari scritti:   {exported_percentiles}")
-    print(f"[INFO] Elementi min/max scritti: {exported_minmax}")
+    print("[INFO] Elementi orari scritti:   " + str(exported_percentiles))
+    print("[INFO] Elementi min/max scritti: " + str(exported_minmax))
 
 
 # ─────────────────────────────────────────────
@@ -656,9 +651,9 @@ def main():
     print("=" * 72)
     print("SABD Project 1 - Export outputs to Redis")
     print("=" * 72)
-    print(f"[INFO] EXPORT_SOURCE = {EXPORT_SOURCE}")
-    print(f"[INFO] REDIS_HOST    = {REDIS_HOST}")
-    print(f"[INFO] REDIS_PORT    = {REDIS_PORT}")
+    print("[INFO] EXPORT_SOURCE = " + EXPORT_SOURCE)
+    print("[INFO] REDIS_HOST    = " + REDIS_HOST)
+    print("[INFO] REDIS_PORT    = " + str(REDIS_PORT))
 
     spark = None
 
