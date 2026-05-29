@@ -7,6 +7,13 @@ Usa mapPartitions per costruire un TDigest locale per partizione,
 poi raccoglie i digest sul driver e li fonde con update_centroids_from_list.
 Tutto il codice t-digest è inline nelle lambda/funzioni di mapPartitions,
 evitando dipendenze da moduli esterni non disponibili sul worker.
+
+FIX ModuleNotFoundError:
+    _build_digests_partition era definita a livello di modulo (top-level).
+    cloudpickle la serializzava come riferimento a 'query3_rdd._build_digests_partition',
+    e gli executor fallivano con "No module named 'query3_rdd'".
+    Soluzione: spostata come closure locale dentro run_query3_rdd(),
+    così cloudpickle serializza il corpo completo senza riferimenti al modulo.
 """
 
 import csv
@@ -40,28 +47,6 @@ LOCAL_OUTPUT_MM    = f"{LOCAL_OUT_PATH}/{OUTPUT_MINMAX}.csv"
 
 CSV_HEADER_PERC    = "airline,hour,num_flights,p25,p50,p75,p90"
 CSV_HEADER_MM      = "airline,min_delay,max_delay"
-
-
-# ─────────────────────────────────────────────
-# Funzione mapPartitions: costruisce un dizionario
-# {(airline, hour): TDigest} per ogni partizione.
-# Tutto il codice t-digest è inline per evitare
-# problemi di serializzazione del modulo sul worker.
-# ─────────────────────────────────────────────
-
-def _build_digests_partition(iterator):
-    """
-    Riceve un iteratore di (airline, hour, dep_delay) per una partizione.
-    Restituisce una lista di ((airline, hour), TDigest).
-    """
-    from tdigest import TDigest
-    local = {}
-    for airline, hour, delay in iterator:
-        key = (airline, hour)
-        if key not in local:
-            local[key] = TDigest(delta=0.01)
-        local[key].update(delay)
-    return list(local.items())
 
 
 # ─────────────────────────────────────────────
@@ -126,6 +111,26 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
     timings = {}
     sc = spark.sparkContext
 
+    # ── FIX: closure locale — cloudpickle serializza il corpo per intero ──
+    # _build_digests_partition era top-level: cloudpickle registrava un
+    # riferimento a 'query3_rdd._build_digests_partition' e gli executor
+    # fallivano con ModuleNotFoundError. Definita qui dentro, viene
+    # serializzata per valore senza alcun riferimento al modulo.
+    def _build_digests_partition(iterator):
+        """
+        Riceve un iteratore di (airline, hour, dep_delay) per una partizione.
+        Restituisce una lista di ((airline, hour), TDigest).
+        """
+        from tdigest import TDigest  # import locale: incluso nella closure
+        local = {}
+        for airline, hour, delay in iterator:
+            key = (airline, hour)
+            if key not in local:
+                local[key] = TDigest(delta=0.01)
+            local[key].update(delay)
+        return list(local.items())
+    # ── FINE FIX ──────────────────────────────────────────────────────────
+
     # ─────────────────────────────────────────────
     # 1. Loading + Filtering
     # ─────────────────────────────────────────────
@@ -135,7 +140,7 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
 
     t0 = time.time()
 
-    target = TARGET_AIRLINES   # closure locale, non importa il modulo
+    target = TARGET_AIRLINES
 
     rdd_base = (
         spark.read.parquet(PARQUET_PATH)
@@ -168,17 +173,14 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
 
     t1 = time.time()
 
-    # Ogni partizione costruisce i propri TDigest localmente (mapPartitions).
-    # reduceByKey fonde i digest tra partizioni: porta sul driver solo oggetti
-    # TDigest compatti, non i dati raw.
     def merge_digests(td1, td2):
         td1.update_centroids_from_list(td2.centroids_to_list())
         return td1
 
     groups_with_digest = (
         rdd_base
-        .mapPartitions(_build_digests_partition)   # [(key, TDigest), ...]
-        .reduceByKey(merge_digests)                # fonde digest tra partizioni
+        .mapPartitions(_build_digests_partition)
+        .reduceByKey(merge_digests)
         .collect()
     )
 

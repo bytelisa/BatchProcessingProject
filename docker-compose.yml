@@ -32,6 +32,7 @@ services:
       - sabd-net
 
   spark-master:
+    build: .                          # usa il Dockerfile nella stessa cartella
     image: apache/spark:3.5.3
     hostname: spark-master
     environment:
