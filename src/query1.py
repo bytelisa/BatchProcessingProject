@@ -23,7 +23,7 @@ Parametri di run_query1():
 
 Output:
 - CSV locale in /opt/output/query1_monthly_stats
-- CSV HDFS in /data/processed/flights/query1_monthly_stats
+- CSV HDFS in /data/output/flights/query1_monthly_stats
 """
 
 import time

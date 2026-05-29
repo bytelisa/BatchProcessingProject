@@ -40,7 +40,11 @@ docker compose exec namenode hdfs dfs -chmod -R 755 /data/raw/flights
 And for Spark as well:
 ```bash
 docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights
+docker compose exec namenode hdfs dfs -mkdir -p /data/output/flights
+
 docker compose exec namenode hdfs dfs -chmod -R 777 /data/processed
+docker compose exec namenode hdfs dfs -chmod -R 777 /data/output
+
 ```
 
 ## 3. Open NiFi web UI
