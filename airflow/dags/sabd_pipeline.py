@@ -33,6 +33,16 @@ SPARK_MASTER_CONTAINER = "batchprocessingproject-spark-master-1"
 
 # Percorso HDFS dove NiFi deposita i CSV
 HDFS_CSV_PATH = "/data/raw/flights/csv/"
+HDFS_OUTPUT_PATH = "/data/output/flights"
+
+EXPECTED_QUERY_OUTPUTS = [
+    "query1_monthly_stats",
+    "query2_all_airlines_stats",
+    "query2_top10_arrival_delay",
+    "query3_hourly_percentiles",
+    "query3_global_minmax",
+]
+
 
 # Comando base spark-submit
 SPARK_SUBMIT = (
@@ -40,6 +50,17 @@ SPARK_SUBMIT = (
     "/opt/spark/bin/spark-submit "
     "--master spark://spark-master:7077 "
     "/opt/scripts/{script}"
+)
+
+# Comando per lanciare lo script di export verso Redis
+EXPORT_TO_REDIS = (
+    f"docker exec "
+    f"-e REDIS_HOST=redis "
+    f"-e EXPORT_SOURCE=hdfs "
+    f"{SPARK_MASTER_CONTAINER} "
+    "/opt/spark/bin/spark-submit "
+    "--master local[*] "
+    "/opt/scripts/export_output_to_redis.py"
 )
 
 # ─────────────────────────────────────────────────────────────
@@ -265,6 +286,52 @@ def check_parquet_ready(**kwargs):
     part_count = result.stdout.count("part-")
     print(f"[Spark] ✓ Parquet pronto: {part_count} partition file trovati")
 
+def check_query_outputs_ready(**kwargs):
+    """
+    Verifica che tutti gli output delle query siano presenti su HDFS
+    prima di esportare verso Redis.
+    """
+    missing = []
+
+    for output_dir in EXPECTED_QUERY_OUTPUTS:
+        path = f"{HDFS_OUTPUT_PATH}/{output_dir}"
+
+        result = subprocess.run(
+            [
+                "docker", "exec", NAMENODE_CONTAINER,
+                "hdfs", "dfs", "-test", "-e", path,
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            missing.append(path)
+            continue
+
+        result_ls = subprocess.run(
+            [
+                "docker", "exec", NAMENODE_CONTAINER,
+                "hdfs", "dfs", "-ls", path,
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        part_count = result_ls.stdout.count("part-")
+        print(f"[HDFS] ✓ Output presente: {path} ({part_count} part file)")
+
+        if part_count == 0:
+            missing.append(f"{path} (nessun part file)")
+
+    if missing:
+        raise FileNotFoundError(
+            "[HDFS] Output query mancanti o incompleti:\n"
+            + "\n".join(f"  - {p}" for p in missing)
+        )
+
+    print("[HDFS] ✓ Tutti gli output delle query sono pronti")
+
 
 # ─────────────────────────────────────────────────────────────
 # Definizione del DAG
@@ -332,10 +399,16 @@ with DAG(
         doc_md="Q3: percentili DEP_DELAY per fascia oraria.",
     )
 
+    t_check_query_outputs = PythonOperator(
+        task_id="check_query_outputs_ready",
+        python_callable=check_query_outputs_ready,
+        doc_md="Verifica che gli output CSV delle query siano presenti su HDFS.",
+    )
+
     t_export = BashOperator(
-        task_id="export_to_redis",
-        bash_command=SPARK_SUBMIT.format(script="export.py"),
-        doc_md="Esporta i CSV risultato da HDFS su Redis.",
+        task_id="export_output_to_redis",
+        bash_command=EXPORT_TO_REDIS,
+        doc_md="Esporta gli output delle query da HDFS a Redis per Grafana.",
     )
 
     # ─────────────────────────────────────────────────────────
@@ -355,15 +428,18 @@ with DAG(
     #  Q1   Q2   Q3   (parallele)
     #  └────┼────┘
     #       │
+    #   t_check_query_outputs
+    #       |
     #   t_export
     # ─────────────────────────────────────────────────────────
 
     (
-        t_nifi_start
-        >> t_nifi_wait
-        >> t_nifi_stop
-        >> t_preprocess
-        >> t_check_parquet
-        >> [t_query1, t_query2, t_query3]
-        >> t_export
+            t_nifi_start
+            >> t_nifi_wait
+            >> t_nifi_stop
+            >> t_preprocess
+            >> t_check_parquet
+            >> [t_query1, t_query2, t_query3]
+            >> t_check_query_outputs
+            >> t_export
     )

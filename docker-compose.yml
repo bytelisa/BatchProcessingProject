@@ -32,8 +32,10 @@ services:
       - sabd-net
 
   spark-master:
-    build: .                          # usa il Dockerfile nella stessa cartella
-    image: apache/spark:3.5.3
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sabd-spark:3.5.3
     hostname: spark-master
     environment:
       - SPARK_NO_DAEMONIZE=true
@@ -46,21 +48,23 @@ services:
       - "8080:8080"
       - "7077:7077"
     volumes:
-      - ./src:/opt/scripts        # ← src è nella stessa cartella del docker-compose
+      - ./src:/opt/scripts
       - ./output:/opt/output
     networks:
       - sabd-net
 
   spark-worker:
-    image: apache/spark:3.5.3
+    image: sabd-spark:3.5.3
+    hostname: spark-worker
     environment:
       - SPARK_NO_DAEMONIZE=true
       - SPARK_HOME=/opt/spark
       - PYSPARK_PYTHON=python3
+      - PYSPARK_DRIVER_PYTHON=python3
       - PYTHONPATH=/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
-      - SPARK_WORKER_MEMORY=3g        # aggiunta
-      - SPARK_WORKER_CORES=2          # aggiunta
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+      - SPARK_WORKER_MEMORY=3g
+      - SPARK_WORKER_CORES=2
+    command: [ "/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077" ]
     depends_on:
       - spark-master
     volumes:

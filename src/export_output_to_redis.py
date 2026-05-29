@@ -33,7 +33,7 @@ import csv
 import os
 import sys
 from datetime import datetime, timezone, timedelta
-
+from pyspark.sql import SparkSession
 import redis
 
 
@@ -45,6 +45,37 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") or None
 
+# ─────────────────────────────────────────────
+# Input source: local oppure hdfs
+# ─────────────────────────────────────────────
+
+EXPORT_SOURCE = os.getenv("EXPORT_SOURCE", "local").lower()
+
+HDFS_BASE = os.getenv("HDFS_BASE", "hdfs://namenode:9000")
+
+HDFS_QUERY_OUTPUT_PATH = os.getenv(
+    "HDFS_QUERY_OUTPUT_PATH",
+    f"{HDFS_BASE}/data/output/flights",
+)
+
+LOCAL_OUTPUT_PATH = os.getenv("LOCAL_OUTPUT_PATH", "output")
+
+
+def default_path(local_name: str, hdfs_dir_name: str) -> str:
+    """
+    Restituisce il path corretto in base a EXPORT_SOURCE.
+
+    local:
+      output/query1_monthly_stats.csv
+
+    hdfs:
+      hdfs://namenode:9000/data/output/flights/query1_monthly_stats
+    """
+    if EXPORT_SOURCE == "hdfs":
+        return f"{HDFS_QUERY_OUTPUT_PATH}/{hdfs_dir_name}"
+
+    return f"{LOCAL_OUTPUT_PATH}/{local_name}"
+
 
 # ─────────────────────────────────────────────
 # CSV paths
@@ -52,24 +83,23 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") or None
 
 Q1_CSV_PATH = os.getenv(
     "Q1_CSV_PATH",
-    os.getenv("CSV_PATH", "output/query1_monthly_stats.csv"),
+    default_path("query1_monthly_stats.csv", "query1_monthly_stats"),
 )
 
 Q2_TOP10_CSV_PATH = os.getenv(
     "Q2_TOP10_CSV_PATH",
-    "output/query2_top10_arrival_delay.csv",
+    default_path("query2_top10_arrival_delay.csv", "query2_top10_arrival_delay"),
 )
 
 Q3_PERCENTILES_CSV_PATH = os.getenv(
     "Q3_PERCENTILES_CSV_PATH",
-    "output/query3_hourly_percentiles.csv",
+    default_path("query3_hourly_percentiles.csv", "query3_hourly_percentiles"),
 )
 
 Q3_MINMAX_CSV_PATH = os.getenv(
     "Q3_MINMAX_CSV_PATH",
-    "output/query3_global_minmax.csv",
+    default_path("query3_global_minmax.csv", "query3_global_minmax"),
 )
-
 
 # ─────────────────────────────────────────────
 # Q1 constants
@@ -164,12 +194,47 @@ def require_file(path: str) -> None:
         sys.exit(1)
 
 
-def load_csv_rows(path: str) -> list[dict]:
-    require_file(path)
+def load_csv_rows(path: str, spark: SparkSession | None = None) -> list[dict]:
+    """
+    Legge un CSV da file locale oppure da directory HDFS.
 
-    with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
+    In modalità HDFS, il path è una directory Spark output, ad esempio:
+      hdfs://namenode:9000/data/output/flights/query1_monthly_stats
+
+    Spark legge automaticamente i part-*.csv dentro la directory.
+    """
+
+    if EXPORT_SOURCE == "hdfs":
+        if spark is None:
+            raise ValueError("SparkSession richiesta per leggere CSV da HDFS")
+
+        print(f"[INFO] Lettura CSV da HDFS: {path}")
+
+        df = (
+            spark.read
+            .option("header", True)
+            .option("inferSchema", False)
+            .csv(path)
+        )
+
+        rows = [
+            {
+                key: "" if value is None else str(value)
+                for key, value in row.asDict().items()
+            }
+            for row in df.collect()
+        ]
+
+    else:
+        print(f"[INFO] Lettura CSV locale: {path}")
+
+        if not os.path.exists(path):
+            print(f"[ERROR] File non trovato: {path}")
+            sys.exit(1)
+
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
 
     if not rows:
         print(f"[ERROR] CSV vuoto: {path}")
@@ -232,14 +297,14 @@ def q1_ts_create_if_needed(pipe, key: str, metric: str, airline: str):
     )
 
 
-def export_q1(r: redis.Redis) -> None:
+def export_q1(r: redis.Redis, spark: SparkSession | None = None) -> None:
     print("\n" + "=" * 72)
     print("EXPORT Q1")
     print("=" * 72)
 
     print(f"[INFO] Lettura CSV Q1: {Q1_CSV_PATH}")
 
-    rows = load_csv_rows(Q1_CSV_PATH)
+    rows = load_csv_rows(Q1_CSV_PATH, spark)
 
     required_columns = {"month", "airline", *Q1_METRICS}
     require_columns(rows, required_columns, Q1_CSV_PATH)
@@ -313,14 +378,14 @@ def export_q1(r: redis.Redis) -> None:
 # Q2 export
 # ─────────────────────────────────────────────
 
-def export_q2(r: redis.Redis) -> None:
+def export_q2(r: redis.Redis, spark: SparkSession | None = None) -> None:
     print("\n" + "=" * 72)
     print("EXPORT Q2")
     print("=" * 72)
 
     print(f"[INFO] Lettura CSV Q2 top 10: {Q2_TOP10_CSV_PATH}")
 
-    rows = load_csv_rows(Q2_TOP10_CSV_PATH)
+    rows = load_csv_rows(Q2_TOP10_CSV_PATH, spark)
     require_columns(rows, Q2_REQUIRED_COLUMNS, Q2_TOP10_CSV_PATH)
 
     deleted = delete_keys_by_prefix(r, "q2")
@@ -558,7 +623,7 @@ def export_q3_global_minmax(r: redis.Redis, rows: list[dict]) -> int:
     return exported
 
 
-def export_q3(r: redis.Redis) -> None:
+def export_q3(r: redis.Redis, spark: SparkSession | None = None) -> None:
     print("\n" + "=" * 72)
     print("EXPORT Q3")
     print("=" * 72)
@@ -572,8 +637,8 @@ def export_q3(r: redis.Redis) -> None:
     deleted = delete_keys_by_prefix(r, "q3")
     print(f"[INFO] Eliminate {deleted} chiavi q3:* precedenti")
 
-    percentile_rows = load_csv_rows(Q3_PERCENTILES_CSV_PATH)
-    minmax_rows = load_csv_rows(Q3_MINMAX_CSV_PATH)
+    percentile_rows = load_csv_rows(Q3_PERCENTILES_CSV_PATH, spark)
+    minmax_rows = load_csv_rows(Q3_MINMAX_CSV_PATH, spark)
 
     exported_percentiles = export_q3_hourly_percentiles(r, percentile_rows)
     exported_minmax = export_q3_global_minmax(r, minmax_rows)
@@ -588,15 +653,36 @@ def export_q3(r: redis.Redis) -> None:
 # ─────────────────────────────────────────────
 
 def main():
-    r = connect_redis()
-
-    export_q1(r)
-    export_q2(r)
-    export_q3(r)
-
-    print("\n" + "=" * 72)
-    print("[✓] Export completo Q1 + Q2 + Q3 su Redis Stack")
     print("=" * 72)
+    print("SABD Project 1 - Export outputs to Redis")
+    print("=" * 72)
+    print(f"[INFO] EXPORT_SOURCE = {EXPORT_SOURCE}")
+    print(f"[INFO] REDIS_HOST    = {REDIS_HOST}")
+    print(f"[INFO] REDIS_PORT    = {REDIS_PORT}")
+
+    spark = None
+
+    if EXPORT_SOURCE == "hdfs":
+        spark = (
+            SparkSession.builder
+            .appName("SABD-ExportOutputToRedis")
+            .getOrCreate()
+        )
+
+    try:
+        r = connect_redis()
+
+        export_q1(r, spark)
+        export_q2(r, spark)
+        export_q3(r, spark)
+
+        print("\n" + "=" * 72)
+        print("[✓] Export completo Q1 + Q2 + Q3 su Redis Stack")
+        print("=" * 72)
+
+    finally:
+        if spark is not None:
+            spark.stop()
 
 
 if __name__ == "__main__":
