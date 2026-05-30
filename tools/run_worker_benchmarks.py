@@ -30,9 +30,22 @@ SPARK_MASTER_JSON_URL = "http://localhost:8080/json"
 SUMMARY_PATH = "output/benchmarks/benchmark_scaling_summary.csv"
 
 
-def run_cmd(cmd, check=True):
+def run_cmd(cmd, check=True, timeout=None):
     print("\n[CMD] " + " ".join(cmd))
-    result = subprocess.run(cmd, text=True)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(
+            "Timeout comando dopo "
+            + str(timeout)
+            + "s: "
+            + " ".join(cmd)
+        )
 
     if check and result.returncode != 0:
         raise RuntimeError("Comando fallito: " + " ".join(cmd))
@@ -142,6 +155,23 @@ def wait_for_hdfs(timeout_seconds=120):
     )
 
 def scale_workers(worker_count):
+    print("\n[INFO] Reset spark-worker e scaling a " + str(worker_count) + " repliche")
+
+    run_cmd([
+        "docker",
+        "compose",
+        "stop",
+        "spark-worker",
+    ], check=False, timeout=60)
+
+    run_cmd([
+        "docker",
+        "compose",
+        "rm",
+        "-f",
+        "spark-worker",
+    ], check=False, timeout=60)
+
     run_cmd([
         "docker",
         "compose",
@@ -150,7 +180,7 @@ def scale_workers(worker_count):
         "--scale",
         "spark-worker=" + str(worker_count),
         "spark-worker",
-    ])
+    ], timeout=180)
 
     wait_for_workers(worker_count)
 
