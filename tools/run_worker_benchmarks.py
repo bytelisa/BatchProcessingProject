@@ -47,6 +47,25 @@ def load_config():
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
+def start_required_services():
+    """
+    Avvia i servizi minimi necessari al benchmark:
+    - HDFS: namenode + datanode
+    - Spark master
+    I worker vengono scalati separatamente da scale_workers().
+    """
+    print("\n[INFO] Avvio servizi richiesti: namenode, datanode, spark-master")
+
+    run_cmd([
+        "docker",
+        "compose",
+        "up",
+        "-d",
+        "namenode",
+        "datanode",
+        "spark-master",
+    ])
+
 
 def get_alive_worker_count():
     with urlopen(SPARK_MASTER_JSON_URL, timeout=5) as response:
@@ -85,6 +104,42 @@ def wait_for_workers(expected_count, timeout_seconds=120):
         f"Timeout: Spark Master non vede {expected_count} worker ALIVE"
     )
 
+def wait_for_hdfs(timeout_seconds=120):
+    """
+    Aspetta che HDFS sia pronto e che il path Parquet preprocessato esista.
+    """
+    print("[INFO] Attendo disponibilità HDFS e dataset Parquet...")
+
+    start = time.time()
+
+    while time.time() - start < timeout_seconds:
+        result = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "namenode",
+                "hdfs",
+                "dfs",
+                "-test",
+                "-e",
+                "/data/processed/flights/parquet",
+            ],
+            text=True,
+        )
+
+        if result.returncode == 0:
+            print("[✓] HDFS pronto: Parquet trovato")
+            return
+
+        print("       HDFS non ancora pronto o Parquet non trovato...")
+        time.sleep(5)
+
+    raise TimeoutError(
+        "Timeout: HDFS non pronto oppure "
+        "/data/processed/flights/parquet non esiste"
+    )
 
 def scale_workers(worker_count):
     run_cmd([
@@ -172,6 +227,9 @@ def main():
     print("Worker counts:    " + str(worker_counts))
     print("Benchmark script: " + benchmark_script)
     print("=" * 72)
+
+    start_required_services()
+    wait_for_hdfs()
 
     for worker_count in worker_counts:
         print("\n" + "=" * 72)
