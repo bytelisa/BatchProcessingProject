@@ -1,7 +1,7 @@
 """
 query2.py
 ─────────
-Query 2 - SABD Project 1
+Query 2 - Implementazione con Dataframe
 
 Output prodotti:
 
