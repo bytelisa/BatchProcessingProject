@@ -170,7 +170,7 @@ def _run(query_id, impl, spark):
 
     elif query_id == 2 and impl == "rdd":
 
-        _, timings = run_query2_rdd(
+        _, _, timings = run_query2_rdd(
 
             spark,
 
@@ -241,7 +241,7 @@ def benchmark_one(query_id, impl, spark):
             timings, end_to_end_s = _run(query_id, impl, spark)
         except Exception as exc:
             print(f"  [ERRORE] Iterazione {i} fallita: {exc}")
-            continue
+            raise
 
         # Aggiunge end_to_end_s al dict timings per trattarlo come le altre fasi
         timings["end_to_end_s"] = end_to_end_s

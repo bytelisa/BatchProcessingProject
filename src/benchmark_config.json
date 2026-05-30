@@ -1,5 +1,5 @@
 {
-  "worker_counts": [1, 2, 3],
+  "worker_counts": [1, 2],
   "total_iterations": 20,
   "warmup_iterations": 5,
   "queries_to_run": [1, 2, 3],
