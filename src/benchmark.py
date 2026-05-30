@@ -28,9 +28,9 @@ import sys
 # CONFIG – modifica qui se vuoi cambiare i parametri del benchmark
 # ─────────────────────────────────────────────────────────────────────────────
 
-TOTAL_ITERATIONS  = 25   # iterazioni totali per query
+TOTAL_ITERATIONS  = 20   # iterazioni totali per query
 WARMUP_ITERATIONS =  5   # iterazioni di warm-up (escluse dalla statistica)
-QUERIES_TO_RUN    = [4]  # quali query eseguire; rimuovi quelle che non vuoi eseguire
+QUERIES_TO_RUN    = [1,2,3,4]  # quali query eseguire; rimuovi quelle che non vuoi eseguire
 
 # Dove scrivere il report finale
 BENCHMARK_REPORT_PATH = "/opt/output/benchmark_report.csv"

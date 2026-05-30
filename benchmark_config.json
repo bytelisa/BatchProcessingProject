@@ -1,0 +1,11 @@
+{
+  "worker_counts": [1, 2, 3],
+  "total_iterations": 20,
+  "warmup_iterations": 5,
+  "queries_to_run": [1, 2, 3],
+  "implementations": ["df", "rdd"],
+  "print_preview": false,
+  "include_output": true,
+  "benchmark_script": "benchmark_rdd_vs_df.py",
+  "report_dir": "/opt/output/benchmarks"
+}

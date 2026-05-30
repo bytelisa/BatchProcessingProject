@@ -407,10 +407,7 @@ def run_query2_rdd(spark, save_output=True, print_preview=True):
         timings["loading_s"] + timings["filtering_s"] + timings["computation_s"], 3
     )
 
-    return {
-        "all_rows": all_rows,
-        "top10_rows": top10_rows,
-    }, timings
+    return all_rows, top10_rows, timings
 
 
 # ─────────────────────────────────────────────

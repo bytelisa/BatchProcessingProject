@@ -55,7 +55,7 @@ services:
 
   spark-worker:
     image: sabd-spark:3.5.3
-    hostname: spark-worker
+    #hostname: spark-worker
     environment:
       - SPARK_NO_DAEMONIZE=true
       - SPARK_HOME=/opt/spark

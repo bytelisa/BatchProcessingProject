@@ -43,17 +43,25 @@ import time
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-TOTAL_ITERATIONS  = 20   # iterazioni totali per ogni implementazione
-WARMUP_ITERATIONS =  5   # iterazioni di warm-up escluse dalla statistica
+from benchmark_config import load_benchmark_config
 
-# Quali query benchmarkare: sottoinsieme di [1, 3]
-QUERIES_TO_RUN = [1, 3]
+CFG = load_benchmark_config()
 
-# Disabilita preview a console per non inquinare i tempi
-PRINT_PREVIEW = False
+TOTAL_ITERATIONS = int(CFG.get("total_iterations", 20))
+WARMUP_ITERATIONS = int(CFG.get("warmup_iterations", 5))
 
-# Path del report CSV finale
-BENCHMARK_REPORT_PATH = "/opt/output/benchmark_rdd_vs_df_report.csv"
+QUERIES_TO_RUN = CFG.get("queries_to_run", [1, 2, 3])
+IMPLEMENTATIONS_TO_RUN = CFG.get("implementations", ["df", "rdd"])
+
+PRINT_PREVIEW = bool(CFG.get("print_preview", False))
+
+WORKER_COUNT = int(os.getenv("SPARK_WORKER_COUNT", "0"))
+
+REPORT_DIR = CFG.get("report_dir", "/opt/output/benchmarks")
+BENCHMARK_REPORT_PATH = os.path.join(
+    REPORT_DIR,
+    "benchmark_rdd_vs_df_workers_" + str(WORKER_COUNT) + ".csv"
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Import runner delle query
@@ -68,6 +76,10 @@ from utils import get_spark_session
 if 1 in QUERIES_TO_RUN:
     from query1     import run_query1
     from query1_rdd import run_query1_rdd
+
+if 2 in QUERIES_TO_RUN:
+    from query2     import run_query2
+    from query2_rdd import run_query2_rdd
 
 if 3 in QUERIES_TO_RUN:
     from query3     import run_query3       # DataFrame + percentile_approx (Greenwald-Khanna)
@@ -104,7 +116,11 @@ def compute_stats(values):
 
 IMPL_LABELS = {
     (1, "df"):  "Q1 DataFrame (groupBy+agg)",
-    (1, "rdd"): "Q1 RDD (reduceByKey)",
+    (1, "rdd"): "Q1 RDD (combineByKey)",
+
+    (2, "df"):  "Q2 DataFrame (groupBy+agg)",
+    (2, "rdd"): "Q2 RDD (combineByKey)",
+
     (3, "df"):  "Q3 DataFrame (percentile_approx / Greenwald-Khanna)",
     (3, "rdd"): "Q3 RDD (t-digest, aggregateByKey)",
 }
@@ -126,20 +142,60 @@ def _run(query_id, impl, spark):
     wall_t0 = time.time()
 
     if query_id == 1 and impl == "df":
-        _, timings = run_query1(spark, save_output=True,
-                                print_preview=PRINT_PREVIEW)
+        _, timings = run_query1(
+            spark,
+            save_output=True,
+            print_preview=PRINT_PREVIEW,
+        )
+
     elif query_id == 1 and impl == "rdd":
-        _, timings = run_query1_rdd(spark, save_output=True,
-                                    print_preview=PRINT_PREVIEW)
+        _, timings = run_query1_rdd(
+            spark,
+            save_output=True,
+            print_preview=PRINT_PREVIEW,
+        )
+
+
+    elif query_id == 2 and impl == "df":
+
+        _, _, timings = run_query2(
+
+            spark,
+
+            save_output=True,
+
+            print_preview=PRINT_PREVIEW,
+
+        )
+
+    elif query_id == 2 and impl == "rdd":
+
+        _, timings = run_query2_rdd(
+
+            spark,
+
+            save_output=True,
+
+            print_preview=PRINT_PREVIEW,
+
+        )
+
     elif query_id == 3 and impl == "df":
-        _, _, timings = run_query3(spark, save_output=True,
-                                   print_preview=PRINT_PREVIEW)
+        _, _, timings = run_query3(
+            spark,
+            save_output=True,
+            print_preview=PRINT_PREVIEW,
+        )
+
     elif query_id == 3 and impl == "rdd":
-        _, _, timings = run_query3_rdd(spark, save_output=True,
-                                       print_preview=PRINT_PREVIEW)
+        _, _, timings = run_query3_rdd(
+            spark,
+            save_output=True,
+            print_preview=PRINT_PREVIEW,
+        )
+
     else:
         raise ValueError(f"Combinazione non supportata: query={query_id}, impl={impl}")
-
     end_to_end_s = round(time.time() - wall_t0, 3)
     return timings, end_to_end_s
 
@@ -246,13 +302,14 @@ def benchmark_one(query_id, impl, spark):
 # ─────────────────────────────────────────────────────────────────────────────
 # Confronto DF vs RDD
 # ─────────────────────────────────────────────────────────────────────────────
-
 def print_comparison(all_results):
     sep = "=" * 72
     print(f"\n\n{sep}")
-    print("  CONFRONTO DataFrame vs RDD")
+    print("  CONFRONTO IMPLEMENTAZIONI")
+    print(f"  Spark workers: {WORKER_COUNT}")
     print(f"  Warm-up escluse: {WARMUP_ITERATIONS}  |  "
           f"Iterazioni valide: {TOTAL_ITERATIONS - WARMUP_ITERATIONS}")
+    print(f"  Implementazioni eseguite: {IMPLEMENTATIONS_TO_RUN}")
     print(f"  Tutte le fasi includono scrittura CSV (end-to-end reale)")
     print(sep)
 
@@ -268,37 +325,74 @@ def print_comparison(all_results):
     ]
 
     for query_id in QUERIES_TO_RUN:
-        df_key  = (query_id, "df")
-        rdd_key = (query_id, "rdd")
-        if df_key not in all_results or rdd_key not in all_results:
+        available_impls = [
+            impl for impl in IMPLEMENTATIONS_TO_RUN
+            if (query_id, impl) in all_results
+        ]
+
+        if not available_impls:
             continue
 
-        _, df_stats  = all_results[df_key]
-        _, rdd_stats = all_results[rdd_key]
-
-        df_label  = IMPL_LABELS.get(df_key,  "DataFrame")
-        rdd_label = IMPL_LABELS.get(rdd_key, "RDD")
-
         print(f"\n  ── Query {query_id} ──────────────────────────────────────────────")
-        print(f"  DataFrame: {df_label}")
-        print(f"  RDD:       {rdd_label}")
-        print(f"  {'Fase':<34} {'DF media':>10} {'RDD media':>10} "
-              f"{'Delta':>10} {'Speedup':>10}")
-        print(f"  {'─'*68}")
 
-        for phase in COMPARE_PHASES:
-            if phase not in df_stats or phase not in rdd_stats:
-                continue
-            df_mean  = df_stats[phase]["mean_s"]
-            rdd_mean = rdd_stats[phase]["mean_s"]
-            delta    = rdd_mean - df_mean
-            speedup  = df_mean / rdd_mean if rdd_mean > 0 else float("inf")
-            winner   = "← DF" if delta > 0 else "← RDD"
-            marker   = " ◄" if phase == "end_to_end_s" else ""
-            print(f"  {phase:<34} {df_mean:>9.3f}s {rdd_mean:>9.3f}s "
-                  f"{delta:>+9.3f}s {speedup:>9.2f}x  {winner}{marker}")
+        for impl in available_impls:
+            label = IMPL_LABELS.get((query_id, impl), impl.upper())
+            print(f"  {impl.upper()}: {label}")
 
-        print(f"  {'─'*68}")
+        # Caso classico: confronto DF vs RDD
+        if "df" in available_impls and "rdd" in available_impls:
+            _, df_stats = all_results[(query_id, "df")]
+            _, rdd_stats = all_results[(query_id, "rdd")]
+
+            print(f"\n  {'Fase':<34} {'DF media':>10} {'RDD media':>10} "
+                  f"{'Delta':>10} {'Speedup':>10}")
+            print(f"  {'─' * 68}")
+
+            for phase in COMPARE_PHASES:
+                if phase not in df_stats or phase not in rdd_stats:
+                    continue
+
+                df_mean = df_stats[phase]["mean_s"]
+                rdd_mean = rdd_stats[phase]["mean_s"]
+
+                delta = rdd_mean - df_mean
+                speedup = df_mean / rdd_mean if rdd_mean > 0 else float("inf")
+
+                if delta > 0:
+                    winner = "← DF"
+                elif delta < 0:
+                    winner = "← RDD"
+                else:
+                    winner = "← pari"
+
+                marker = " ◄" if phase == "end_to_end_s" else ""
+
+                print(f"  {phase:<34} {df_mean:>9.3f}s {rdd_mean:>9.3f}s "
+                      f"{delta:>+9.3f}s {speedup:>9.2f}x  {winner}{marker}")
+
+            print(f"  {'─' * 68}")
+
+        # Caso non comparativo: è stata eseguita una sola implementazione
+        else:
+            impl = available_impls[0]
+            _, stats = all_results[(query_id, impl)]
+
+            print(f"\n  {'Fase':<34} {impl.upper() + ' media':>12} "
+                  f"{'Std':>8} {'Min':>8} {'Max':>8}")
+            print(f"  {'─' * 68}")
+
+            for phase in COMPARE_PHASES:
+                if phase not in stats:
+                    continue
+
+                s = stats[phase]
+                marker = " ◄" if phase == "end_to_end_s" else ""
+
+                print(f"  {phase:<34} {s['mean_s']:>11.3f}s "
+                      f"{s['std_s']:>7.3f}s {s['min_s']:>7.3f}s "
+                      f"{s['max_s']:>7.3f}s{marker}")
+
+            print(f"  {'─' * 68}")
 
     print(f"\n{sep}\n")
 
@@ -316,10 +410,14 @@ def save_report(all_results):
     os.makedirs(os.path.dirname(BENCHMARK_REPORT_PATH), exist_ok=True)
 
     ALGO_NOTE = {
-        (3, "df"):  "percentile_approx (Greenwald-Khanna, Spark native)",
+        (1, "df"): "groupBy+agg",
+        (1, "rdd"): "combineByKey",
+
+        (2, "df"): "groupBy+agg",
+        (2, "rdd"): "combineByKey",
+
+        (3, "df"): "percentile_approx (Greenwald-Khanna, Spark native)",
         (3, "rdd"): "t-digest (aggregateByKey, merge sul driver)",
-        (1, "df"):  "groupBy+agg",
-        (1, "rdd"): "reduceByKey",
     }
 
     rows = []
@@ -329,21 +427,40 @@ def save_report(all_results):
             note = "includes_output" if phase in ("output_s", "end_to_end_s") \
                    else "computation_only"
             rows.append({
-                "query":     f"Q{query_id}",
-                "impl":      impl,
+                "worker_count": WORKER_COUNT,
+                "query": f"Q{query_id}",
+                "impl": impl,
                 "algorithm": algo,
-                "phase":     phase,
-                "n":         s["n"],
-                "mean_s":    s["mean_s"],
-                "std_s":     s["std_s"],
-                "median_s":  s["median_s"],
-                "min_s":     s["min_s"],
-                "max_s":     s["max_s"],
-                "note":      note,
+                "phase": phase,
+                "n": s["n"],
+                "mean_s": s["mean_s"],
+                "std_s": s["std_s"],
+                "median_s": s["median_s"],
+                "min_s": s["min_s"],
+                "max_s": s["max_s"],
+                "total_iterations": TOTAL_ITERATIONS,
+                "warmup_iterations": WARMUP_ITERATIONS,
+                "valid_iterations": TOTAL_ITERATIONS - WARMUP_ITERATIONS,
+                "note": note,
             })
 
-    fieldnames = ["query", "impl", "algorithm", "phase", "n",
-                  "mean_s", "std_s", "median_s", "min_s", "max_s", "note"]
+    fieldnames = [
+        "worker_count",
+        "query",
+        "impl",
+        "algorithm",
+        "phase",
+        "n",
+        "mean_s",
+        "std_s",
+        "median_s",
+        "min_s",
+        "max_s",
+        "total_iterations",
+        "warmup_iterations",
+        "valid_iterations",
+        "note",
+    ]
 
     with open(BENCHMARK_REPORT_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -367,6 +484,7 @@ def main():
     print("=" * 72)
     print("  SABD Project 1 – Benchmark DataFrame vs RDD")
     print(f"  Query:              {QUERIES_TO_RUN}")
+    print(f"  Spark workers:      {WORKER_COUNT}")
     print(f"  Iterazioni totali:  {TOTAL_ITERATIONS}  "
           f"(warm-up: {WARMUP_ITERATIONS}, valide: {valid})")
     print(f"  Scrittura CSV:      ogni iterazione valida")
