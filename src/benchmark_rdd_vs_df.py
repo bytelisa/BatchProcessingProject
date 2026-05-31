@@ -63,6 +63,10 @@ BENCHMARK_REPORT_PATH = os.path.join(
     "benchmark_rdd_vs_df_workers_" + str(WORKER_COUNT) + ".csv"
 )
 
+BENCHMARK_RAW_PATH = os.path.join(
+    REPORT_DIR,
+    "benchmark_rdd_vs_df_raw_workers_" + str(WORKER_COUNT) + ".csv"
+)
 # ─────────────────────────────────────────────────────────────────────────────
 # Import runner delle query
 # ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +113,30 @@ def compute_stats(values):
         "max_s":    round(max(values),     3),
     }
 
+def get_processing_phase_for_query(query_id, timings):
+    """
+    Restituisce la fase principale di computazione da usare nel raw report.
+
+    Q1/Q2:
+      computation_s
+
+    Q3:
+      computation_percentiles_s, perché è la fase più significativa
+      della query sui percentili.
+    """
+    if query_id in (1, 2):
+        return "computation_s"
+
+    if query_id == 3:
+        if "computation_percentiles_s" in timings:
+            return "computation_percentiles_s"
+        if "computation_s" in timings:
+            return "computation_s"
+
+    if "computation_s" in timings:
+        return "computation_s"
+
+    return None
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Labels descrittivi per il report
@@ -228,7 +256,8 @@ def benchmark_one(query_id, impl, spark):
     print(f"  Preview a console:   {'abilitata' if PRINT_PREVIEW else 'disabilitata'}")
     print(sep)
 
-    collected   = []
+    collected = []
+    raw_rows = []
     valid_count = 0
 
     for i in range(1, TOTAL_ITERATIONS + 1):
@@ -260,6 +289,30 @@ def benchmark_one(query_id, impl, spark):
         if not is_warmup:
             valid_count += 1
             collected.append(timings)
+
+            # Raw timing per box plot: end-to-end
+            if "end_to_end_s" in timings:
+                raw_rows.append({
+                    "worker_count": WORKER_COUNT,
+                    "query": "Q" + str(query_id),
+                    "impl": impl,
+                    "iteration": valid_count,
+                    "phase": "end_to_end_s",
+                    "time_s": timings["end_to_end_s"],
+                })
+
+            # Raw timing per box plot: processing/computation principale
+            processing_phase = get_processing_phase_for_query(query_id, timings)
+
+            if processing_phase is not None and processing_phase in timings:
+                raw_rows.append({
+                    "worker_count": WORKER_COUNT,
+                    "query": "Q" + str(query_id),
+                    "impl": impl,
+                    "iteration": valid_count,
+                    "phase": "processing_s",
+                    "time_s": timings[processing_phase],
+                })
 
     if not collected:
         print(f"\n  [WARN] Nessuna iterazione valida per {label}.")
@@ -296,7 +349,7 @@ def benchmark_one(query_id, impl, spark):
     print(f"  {'─'*68}")
     print(f"  ◄ = tempo end-to-end richiesto dalla specifica (include output CSV)")
 
-    return collected, stats_per_phase
+    return collected, stats_per_phase, raw_rows
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -469,6 +522,34 @@ def save_report(all_results):
 
     print(f"\n[✓] Report salvato in: {BENCHMARK_REPORT_PATH}")
 
+def save_raw_report(raw_rows):
+    """
+    Salva i tempi grezzi delle iterazioni valide.
+
+    Questo file serve per costruire box plot in Grafana.
+    Contiene solo:
+      - end_to_end_s
+      - processing_s
+
+    Non include le iterazioni di warm-up.
+    """
+    os.makedirs(os.path.dirname(BENCHMARK_RAW_PATH), exist_ok=True)
+
+    fieldnames = [
+        "worker_count",
+        "query",
+        "impl",
+        "iteration",
+        "phase",
+        "time_s",
+    ]
+
+    with open(BENCHMARK_RAW_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(raw_rows)
+
+    print(f"\n[✓] Report raw salvato in: {BENCHMARK_RAW_PATH}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point
@@ -499,12 +580,14 @@ def main():
 
     benchmark_start = time.time()
     all_results = {}   # { (query_id, impl): (collected_timings, stats_per_phase) }
+    all_raw_rows = []
 
     try:
         for query_id in QUERIES_TO_RUN:
-            for impl in ["df", "rdd"]:
-                collected, stats = benchmark_one(query_id, impl, spark)
+            for impl in IMPLEMENTATIONS_TO_RUN:
+                collected, stats, raw_rows = benchmark_one(query_id, impl, spark)
                 all_results[(query_id, impl)] = (collected, stats)
+                all_raw_rows.extend(raw_rows)
     finally:
         spark.stop()
 
@@ -512,6 +595,7 @@ def main():
 
     print_comparison(all_results)
     save_report(all_results)
+    save_raw_report(all_raw_rows)
 
     print(f"Durata totale benchmark: {total_time:.1f}s  ({total_time/60:.1f} minuti)")
     print("[✓] Benchmark completato.\n")
