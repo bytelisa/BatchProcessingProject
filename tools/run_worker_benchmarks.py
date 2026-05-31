@@ -38,6 +38,14 @@ SPARK_MASTER_JSON_URL = "http://localhost:8080/json"
 
 SUMMARY_PATH = "output/benchmarks/benchmark_scaling_summary.csv"
 
+SUMMARY_RAW_PATH = os.path.join(
+    PROJECT_ROOT,
+    "output",
+    "benchmarks",
+    "benchmark_raw_iterations_summary.csv",
+)
+
+
 
 
 def run_cmd(cmd, check=True, timeout=180, stream_output=False):
@@ -282,6 +290,49 @@ def aggregate_reports(worker_counts):
     print("\n[✓] Report aggregato salvato in: " + SUMMARY_PATH)
 
 
+def aggregate_raw_reports(worker_counts):
+    os.makedirs(os.path.dirname(SUMMARY_RAW_PATH), exist_ok=True)
+
+    all_rows = []
+    fieldnames = None
+
+    for worker_count in worker_counts:
+        path = os.path.join(
+            PROJECT_ROOT,
+            "output",
+            "benchmarks",
+            "benchmark_rdd_vs_df_raw_workers_" + str(worker_count) + ".csv",
+        )
+
+        if not os.path.exists(path):
+            print("[WARN] Raw report non trovato, salto: " + path)
+            continue
+
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        if not rows:
+            print("[WARN] Raw report vuoto, salto: " + path)
+            continue
+
+        if fieldnames is None:
+            fieldnames = reader.fieldnames
+
+        all_rows.extend(rows)
+
+    if not all_rows:
+        print("[WARN] Nessun raw report aggregato creato")
+        return
+
+    with open(SUMMARY_RAW_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(all_rows)
+
+    print("\n[✓] Raw report aggregato salvato in: " + SUMMARY_RAW_PATH)
+
+
 def main():
     cfg = load_config()
 
@@ -307,6 +358,7 @@ def main():
         run_benchmark(worker_count, benchmark_script)
 
     aggregate_reports(worker_counts)
+    aggregate_raw_reports(worker_counts)
 
     print("\n[✓] Benchmark scaling completato")
 
