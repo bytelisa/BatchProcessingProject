@@ -24,34 +24,66 @@ import sys
 import time
 from urllib.request import urlopen
 
+# ─────────────────────────────────────────────
+# Path progetto
+# ─────────────────────────────────────────────
 
-CONFIG_PATH = "src/benchmark_config.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+
+CONFIG_PATH = os.path.join(PROJECT_ROOT, "src", "benchmark_config.json")
+
 SPARK_MASTER_JSON_URL = "http://localhost:8080/json"
+
 SUMMARY_PATH = "output/benchmarks/benchmark_scaling_summary.csv"
 
 
-def run_cmd(cmd, check=True, timeout=None):
+
+def run_cmd(cmd, check=True, timeout=180, stream_output=False):
     print("\n[CMD] " + " ".join(cmd))
 
     try:
-        result = subprocess.run(
-            cmd,
-            text=True,
-            timeout=timeout,
-        )
+        if stream_output:
+            result = subprocess.run(
+                cmd,
+                cwd=PROJECT_ROOT,
+                text=True,
+                timeout=timeout,
+            )
+        else:
+            result = subprocess.run(
+                cmd,
+                cwd=PROJECT_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+            )
+
+            if result.stdout:
+                print(result.stdout)
+
+            if result.stderr:
+                print(result.stderr)
+
     except subprocess.TimeoutExpired:
         raise TimeoutError(
-            "Timeout comando dopo "
+            "Timeout dopo "
             + str(timeout)
-            + "s: "
+            + "s sul comando: "
             + " ".join(cmd)
         )
 
     if check and result.returncode != 0:
-        raise RuntimeError("Comando fallito: " + " ".join(cmd))
+        raise RuntimeError(
+            "Comando fallito con exit code "
+            + str(result.returncode)
+            + ": "
+            + " ".join(cmd)
+        )
 
-    return result.returncode
-
+    return result
 
 def load_config():
     if not os.path.exists(CONFIG_PATH):
@@ -93,8 +125,12 @@ def get_alive_worker_count():
     return len(alive)
 
 
-def wait_for_workers(expected_count, timeout_seconds=120):
-    print(f"[INFO] Attendo {expected_count} worker ALIVE sullo Spark Master...")
+def wait_for_workers(expected_count, timeout_seconds=180):
+    print(
+        "\n[INFO] Attendo "
+        + str(expected_count)
+        + " worker ALIVE sullo Spark Master..."
+    )
 
     start = time.time()
 
@@ -102,10 +138,10 @@ def wait_for_workers(expected_count, timeout_seconds=120):
         try:
             alive_count = get_alive_worker_count()
         except Exception as exc:
-            print(f"[WARN] Spark Master non ancora pronto: {exc}")
+            print("[WARN] Impossibile leggere Spark Master: " + str(exc))
             alive_count = 0
 
-        print(f"       worker ALIVE: {alive_count}/{expected_count}")
+        print("       worker ALIVE: " + str(alive_count) + "/" + str(expected_count))
 
         if alive_count == expected_count:
             print("[✓] Numero worker corretto")
@@ -114,7 +150,10 @@ def wait_for_workers(expected_count, timeout_seconds=120):
         time.sleep(5)
 
     raise TimeoutError(
-        f"Timeout: Spark Master non vede {expected_count} worker ALIVE"
+        "Timeout: Spark Master vede "
+        + str(alive_count)
+        + " worker ALIVE, attesi "
+        + str(expected_count)
     )
 
 def wait_for_hdfs(timeout_seconds=120):
@@ -155,22 +194,12 @@ def wait_for_hdfs(timeout_seconds=120):
     )
 
 def scale_workers(worker_count):
-    print("\n[INFO] Reset spark-worker e scaling a " + str(worker_count) + " repliche")
-
-    run_cmd([
-        "docker",
-        "compose",
-        "stop",
-        "spark-worker",
-    ], check=False, timeout=60)
-
-    run_cmd([
-        "docker",
-        "compose",
-        "rm",
-        "-f",
-        "spark-worker",
-    ], check=False, timeout=60)
+    """
+    Scala spark-worker al numero richiesto.
+    Se Docker Compose resta appeso, fallisce con timeout invece di bloccare
+    tutto il terminale.
+    """
+    print("\n[INFO] Scaling spark-worker a " + str(worker_count) + " repliche")
 
     run_cmd([
         "docker",
@@ -182,14 +211,22 @@ def scale_workers(worker_count):
         "spark-worker",
     ], timeout=180)
 
-    wait_for_workers(worker_count)
+    wait_for_workers(worker_count, timeout_seconds=180)
 
 
 def run_benchmark(worker_count, benchmark_script):
+    print(
+        "\n[INFO] Lancio benchmark con "
+        + str(worker_count)
+        + " worker: "
+        + benchmark_script
+    )
+
     run_cmd([
         "docker",
         "compose",
         "exec",
+        "-T",
         "-e",
         "SPARK_WORKER_COUNT=" + str(worker_count),
         "-e",
@@ -199,7 +236,7 @@ def run_benchmark(worker_count, benchmark_script):
         "--master",
         "spark://spark-master:7077",
         "/opt/scripts/" + benchmark_script,
-    ])
+    ], timeout=7200, stream_output=True)
 
 
 def aggregate_reports(worker_counts):

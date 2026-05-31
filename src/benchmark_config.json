@@ -1,7 +1,7 @@
 {
   "worker_counts": [1, 2],
-  "total_iterations": 20,
-  "warmup_iterations": 5,
+  "total_iterations": 5,
+  "warmup_iterations": 2,
   "queries_to_run": [1, 2, 3],
   "implementations": ["df", "rdd"],
   "print_preview": false,
