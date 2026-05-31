@@ -1,0 +1,113 @@
+{
+  "datasource": {
+    "type": "redis-datasource",
+    "uid": "redis_ds"
+  },
+  "fieldConfig": {
+    "defaults": {
+      "custom": {
+        "align": "auto",
+        "cellOptions": {
+          "type": "auto"
+        },
+        "inspect": false
+      },
+      "mappings": [],
+      "thresholds": {
+        "mode": "absolute",
+        "steps": [
+          {
+            "color": "green",
+            "value": null
+          },
+          {
+            "color": "red",
+            "value": 80
+          }
+        ]
+      },
+      "color": {
+        "mode": "thresholds"
+      }
+    },
+    "overrides": []
+  },
+  "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 0
+  },
+  "id": 1,
+  "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+      "show": false,
+      "reducer": [
+        "sum"
+      ],
+      "countRows": false,
+      "fields": ""
+    }
+  },
+  "pluginVersion": "10.4.0",
+  "targets": [
+    {
+      "command": "",
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "hide": false,
+      "query": "HGETALL bench:line:Q1:rdd:end_to_end_s:mean",
+      "refId": "Q1 RDD",
+      "type": "cli"
+    },
+    {
+      "command": "",
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "hide": false,
+      "query": "HGETALL bench:line:Q1:DF:end_to_end_s:mean",
+      "refId": "Q1 DF",
+      "type": "cli"
+    }
+  ],
+  "title": "Query 1: End to End Time vs Number of Workers",
+  "transformations": [
+    {
+      "id": "convertFieldType",
+      "options": {
+        "conversions": [
+          {
+            "destinationType": "number",
+            "targetField": "Value"
+          }
+        ],
+        "fields": {}
+      }
+    },
+    {
+      "id": "joinByField",
+      "options": {
+        "byField": "Value",
+        "mode": "outer"
+      }
+    },
+    {
+      "id": "organize",
+      "options": {
+        "excludeByName": {},
+        "includeByName": {},
+        "indexByName": {},
+        "renameByName": {
+          "Value": "mean_s"
+        }
+      }
+    }
+  ],
+  "type": "table"
+}
