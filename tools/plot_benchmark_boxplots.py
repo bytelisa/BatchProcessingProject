@@ -1,22 +1,15 @@
 """
 plot_benchmark_boxplots.py
 
-Generate publication-quality matplotlib box plots from benchmark raw
-end-to-end iteration data.
+Generate a 2x3 grid of end-to-end benchmark box plots from raw iteration data.
 
 Input:
   output/benchmarks/benchmark_raw_iterations_summary.csv
 
 Output:
-  plots/boxplots/boxplot_q1_end_to_end.png
-  plots/boxplots/boxplot_q1_end_to_end.pdf
-  plots/boxplots/boxplot_q2_end_to_end.png
-  plots/boxplots/boxplot_q2_end_to_end.pdf
-  plots/boxplots/boxplot_q3_end_to_end.png
-  plots/boxplots/boxplot_q3_end_to_end.pdf
+  plots/benchmark_plots/boxplot_end_to_end_distribution_grid.png
 """
 
-import os
 from pathlib import Path
 
 import matplotlib
@@ -24,27 +17,26 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
 import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INPUT_CSV = PROJECT_ROOT / "output" / "benchmarks" / "benchmark_raw_iterations_summary.csv"
-OUTPUT_DIR = PROJECT_ROOT / "plots" / "boxplots"
+OUTPUT_DIR = PROJECT_ROOT / "plots" / "benchmark_plots"
+OUTPUT_PATH = OUTPUT_DIR / "boxplot_end_to_end_distribution_grid.png"
+DISPLAY_OUTPUT_PATH = "output/benchmark_plots/boxplot_end_to_end_distribution_grid.png"
 
 QUERIES = ["Q1", "Q2", "Q3"]
 IMPLEMENTATIONS = ["df", "rdd"]
 
-QUERY_TITLES = {
-    "Q1": "Q1 - End-to-end execution time distribution",
-    "Q2": "Q2 - End-to-end execution time distribution",
-    "Q3": "Q3 - End-to-end execution time distribution",
+IMPL_LABELS = {
+    "df": "DataFrame",
+    "rdd": "RDD",
 }
 
-OUTPUT_BASENAMES = {
-    "Q1": "boxplot_q1_end_to_end",
-    "Q2": "boxplot_q2_end_to_end",
-    "Q3": "boxplot_q3_end_to_end",
+IMPL_COLORS = {
+    "df": "#2ca02c",
+    "rdd": "#1f77b4",
 }
 
 
@@ -80,66 +72,63 @@ def read_raw_iterations(path):
     df = df.dropna(subset=["worker_count", "time_s"])
     df["worker_count"] = df["worker_count"].astype(int)
 
-    return df[df["phase"] == "end_to_end_s"]
+    return df
 
 
-def build_worker_impl_data(query_df):
-    worker_counts = sorted(query_df["worker_count"].unique().tolist())
-    data_by_impl = {
-        "df": [],
-        "rdd": [],
-    }
-
-    for worker_count in worker_counts:
-        for impl in IMPLEMENTATIONS:
-            group_df = query_df[
-                (query_df["worker_count"] == worker_count)
-                & (query_df["impl"] == impl)
-            ]
-
-            data_by_impl[impl].append(group_df["time_s"].dropna().tolist())
-
-    return worker_counts, data_by_impl
+def filter_end_to_end_rows(raw_df):
+    return raw_df[
+        (raw_df["phase"] == "end_to_end_s")
+        & (raw_df["query"].isin(QUERIES))
+        & (raw_df["impl"].isin(IMPLEMENTATIONS))
+    ].copy()
 
 
-def warn_small_groups(query, worker_counts, data_by_impl):
-    for worker_count, df_values, rdd_values in zip(
-        worker_counts,
-        data_by_impl["df"],
-        data_by_impl["rdd"],
-    ):
-        for impl, values in [("df", df_values), ("rdd", rdd_values)]:
-            if values and len(values) < 5:
+def get_worker_box_data(filtered_df, query, impl, workers):
+    data = []
+    positions = []
+
+    for position, worker_count in enumerate(workers, start=1):
+        group_df = filtered_df[
+            (filtered_df["query"] == query)
+            & (filtered_df["impl"] == impl)
+            & (filtered_df["worker_count"] == worker_count)
+        ]
+        values = group_df["time_s"].dropna().tolist()
+
+        if values:
+            data.append(values)
+            positions.append(position)
+
+            if len(values) < 5:
                 print(
                     "[WARN] "
                     + query
-                    + " group "
-                    + str(worker_count)
-                    + "W "
+                    + " "
                     + impl
-                    + " has fewer than 5 observations (n="
+                    + " "
+                    + str(worker_count)
+                    + "W has fewer than 5 observations (n="
                     + str(len(values))
                     + "); box plot may be weak."
                 )
 
+    return data, positions
 
-def draw_impl_boxplot(ax, data, positions, color, label):
-    if not data:
-        return
 
+def draw_boxplot(ax, data, positions, color):
     boxplot = ax.boxplot(
         data,
         positions=positions,
-        widths=0.30,
+        widths=0.45,
         patch_artist=True,
         showfliers=True,
-        medianprops={"color": "#d62728", "linewidth": 1.8},
-        boxprops={"linewidth": 1.2},
-        whiskerprops={"linewidth": 1.1},
-        capprops={"linewidth": 1.1},
+        medianprops={"color": "#d62728", "linewidth": 1.6},
+        boxprops={"linewidth": 1.1},
+        whiskerprops={"linewidth": 1.0},
+        capprops={"linewidth": 1.0},
         flierprops={
             "marker": "o",
-            "markersize": 4,
+            "markersize": 3.5,
             "markerfacecolor": "white",
             "markeredgecolor": "#555555",
             "alpha": 0.8,
@@ -151,114 +140,78 @@ def draw_impl_boxplot(ax, data, positions, color, label):
         box.set_alpha(0.75)
         box.set_edgecolor("#333333")
 
-    for median in boxplot["medians"]:
-        median.set_label(label)
 
+def setup_subplot(ax, query, impl, workers):
+    worker_positions = list(range(1, len(workers) + 1))
 
-def plot_query(query, query_df):
-    if query_df.empty:
-        print("[WARN] No end_to_end_s data for " + query + "; skipping.")
-        return []
-
-    worker_counts, data_by_impl = build_worker_impl_data(query_df)
-    if not worker_counts:
-        print("[WARN] No plottable groups for " + query + "; skipping.")
-        return []
-
-    warn_small_groups(query, worker_counts, data_by_impl)
-
-    fig_width = max(7.5, len(worker_counts) * 1.6)
-    fig, ax = plt.subplots(figsize=(fig_width, 5.2))
-
-    worker_positions = list(range(1, len(worker_counts) + 1))
-    offset = 0.18
-
-    df_data = []
-    df_positions = []
-    rdd_data = []
-    rdd_positions = []
-
-    for position, df_values, rdd_values in zip(
-        worker_positions,
-        data_by_impl["df"],
-        data_by_impl["rdd"],
-    ):
-        if df_values:
-            df_data.append(df_values)
-            df_positions.append(position - offset)
-
-        if rdd_values:
-            rdd_data.append(rdd_values)
-            rdd_positions.append(position + offset)
-
-    draw_impl_boxplot(
-        ax=ax,
-        data=df_data,
-        positions=df_positions,
-        color="#2ca02c",
-        label="DataFrame",
-    )
-    draw_impl_boxplot(
-        ax=ax,
-        data=rdd_data,
-        positions=rdd_positions,
-        color="#1f77b4",
-        label="RDD",
-    )
-
-    ax.set_title(QUERY_TITLES[query], fontsize=14, pad=12)
-    ax.set_ylabel("Execution time (s)", fontsize=11)
-    ax.set_xlabel("")
+    ax.set_title(query + " - " + IMPL_LABELS[impl], fontsize=12, pad=8)
+    ax.set_ylabel("Execution time (s)", fontsize=10)
+    ax.set_xlabel("Number of workers", fontsize=10)
     ax.set_xticks(worker_positions)
-    ax.set_xticklabels([str(worker_count) + "W" for worker_count in worker_counts])
-    ax.grid(axis="y", color="#d9d9d9", linestyle="-", linewidth=0.8, alpha=0.8)
+    ax.set_xticklabels([str(worker_count) + "W" for worker_count in workers])
+    ax.grid(axis="y", color="#d9d9d9", linestyle="-", linewidth=0.8, alpha=0.85)
     ax.set_axisbelow(True)
-    ax.legend(
-        handles=[
-            Patch(facecolor="#2ca02c", edgecolor="#333333", alpha=0.75, label="DataFrame"),
-            Patch(facecolor="#1f77b4", edgecolor="#333333", alpha=0.75, label="RDD"),
-        ],
-        loc="best",
-        frameon=True,
-    )
 
-    fig.tight_layout()
 
-    basename = OUTPUT_BASENAMES[query]
-    png_path = OUTPUT_DIR / (basename + ".png")
-    pdf_path = OUTPUT_DIR / (basename + ".pdf")
+def plot_end_to_end_boxplot_grid(raw_df, output_path):
+    filtered_df = filter_end_to_end_rows(raw_df)
 
-    fig.savefig(png_path, dpi=300)
-    fig.savefig(pdf_path)
+    if filtered_df.empty:
+        print("[WARN] No end_to_end_s benchmark data available; skipping plot.")
+        return False
+
+    workers = sorted(filtered_df["worker_count"].unique().tolist())
+    if not workers:
+        print("[WARN] No worker_count values available; skipping plot.")
+        return False
+
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(14.5, 8.0), sharey=False)
+    fig.suptitle("End-to-end execution time distribution", fontsize=16, y=0.98)
+
+    for row_index, impl in enumerate(IMPLEMENTATIONS):
+        for col_index, query in enumerate(QUERIES):
+            ax = axes[row_index, col_index]
+            setup_subplot(ax, query, impl, workers)
+
+            data, positions = get_worker_box_data(
+                filtered_df=filtered_df,
+                query=query,
+                impl=impl,
+                workers=workers,
+            )
+
+            if not data:
+                print("[WARN] No data for " + query + " " + impl + "; subplot left empty.")
+                continue
+
+            draw_boxplot(
+                ax=ax,
+                data=data,
+                positions=positions,
+                color=IMPL_COLORS[impl],
+            )
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(output_path, dpi=300)
     plt.close(fig)
-
-    return [png_path, pdf_path]
+    return True
 
 
 def main():
     print("=" * 72)
-    print("Benchmark end-to-end box plot generation")
+    print("Benchmark end-to-end box plot grid generation")
     print("=" * 72)
     print("[INFO] Project root: " + str(PROJECT_ROOT))
     print("[INFO] Input CSV:  " + str(INPUT_CSV))
-    print("[INFO] Output dir: " + str(OUTPUT_DIR))
+    print("[INFO] Output PNG: " + str(OUTPUT_PATH))
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    df = read_raw_iterations(INPUT_CSV)
+    raw_df = read_raw_iterations(INPUT_CSV)
+    generated = plot_end_to_end_boxplot_grid(raw_df, OUTPUT_PATH)
 
-    generated_files = []
-
-    for query in QUERIES:
-        query_df = df[df["query"] == query]
-        generated_files.extend(plot_query(query, query_df))
-
-    print("\nGenerated files:")
-    if generated_files:
-        for path in generated_files:
-            print("  - " + os.fspath(path))
-    else:
-        print("  No files generated.")
+    if generated:
+        print("[OK] Saved " + str(DISPLAY_OUTPUT_PATH))
 
 
 if __name__ == "__main__":
