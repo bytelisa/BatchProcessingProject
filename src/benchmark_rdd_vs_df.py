@@ -181,6 +181,7 @@ def _run(query_id, impl, spark):
             spark,
             save_output=True,
             print_preview=PRINT_PREVIEW,
+
         )
 
 
@@ -195,6 +196,7 @@ def _run(query_id, impl, spark):
             print_preview=PRINT_PREVIEW,
 
         )
+        print("[DEBUG Q2 DF timings]", timings)
 
     elif query_id == 2 and impl == "rdd":
 
@@ -301,7 +303,7 @@ def benchmark_one(query_id, impl, spark):
                     "time_s": timings["end_to_end_s"],
                 })
 
-            # Raw timing per box plot: processing/computation principale
+            # Raw timing per box plot: processing principale
             processing_phase = get_processing_phase_for_query(query_id, timings)
 
             if processing_phase is not None and processing_phase in timings:
