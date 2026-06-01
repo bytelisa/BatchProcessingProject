@@ -1,34 +1,28 @@
 """
-Benchmark delle Query Spark (DataFrame)
+Benchmark Cold Start delle Query Spark
 
-Esegue ciascuna query per un numero configurabile di iterazioni,
-escludendo le prime N iterazioni di warm-up dalla raccolta dati.
+Variante del benchmark principale in cui la SparkSession viene
+fermata e ricreata a ogni iterazione, simulando il cold start
+(JVM spenta, nessuna cache di OS/JVM, piano di esecuzione da ricompilare).
 
-NOTA: il benchmark usa una sessione condivisa (warm session), in particolare, il Parquet viene cachato
-dal OS/JVM dopo la prima lettura — le iterazioni successive lo trovano già in memoria.
+Confronto con benchmark.py (warm session):
+  - benchmark.py          → sessione unica condivisa: misura throughput
+                            in condizioni operative (JVM calda, page cache attiva)
+  - benchmark_coldstart.py → sessione riavviata ogni volta: misura latenza
+                            percepita al primo avvio della query (cold start)
 
-Strategia di misurazione:
-  - Warm-up (is_warmup=True):  save_output=False, print_preview=False
-      → nessuna scrittura CSV, nessun inquinamento dei dati raccolti
-  - Iterazioni valide:         save_output=True,  print_preview=False
-      → ogni iterazione misura tutte le fasi: loading, computation, output
-      → output_s è incluso nel dict timings e nelle statistiche finali
+Fasi aggiuntive misurate:
+  - spark_start_s — tempo di boot della JVM + connessione al master
+  - spark_stop_s — tempo di shutdown
+  - wall_total_s — include anche il boot, quindi è il tempo percepito reale da zero
 
-Fasi misurate e riportate nel CSV di report:
-  Q1: loading_s, filtering_s, computation_s, output_s, total_s, wall_total_s
-  Q2: loading_s, all_airlines_computation_s, top10_computation_s, output_s, total_s, wall_total_s
-  Q3: loading_s, filtering_s, computation_percentiles_s, computation_minmax_s, output_s, total_s, wall_total_s
+Utilizzo:
+    ./run.sh benchmark_coldstart.py
 
-Utilizzo (dall'esterno del container):
-    ./run.sh benchmark.py
-
-Oppure direttamente inside il container spark-master:
-    spark-submit --master spark://spark-master:7077 /opt/scripts/tools/benchmark.py
-
-Parametri configurabili (sezione CONFIG più in basso):
-    TOTAL_ITERATIONS  – numero totale di esecuzioni per query  (default: 20)
-    WARMUP_ITERATIONS – iterazioni iniziali escluse dai dati   (default:  5)
-    QUERIES_TO_RUN    – lista delle query da includere nel benchmark
+Parametri configurabili (sezione CONFIG):
+    TOTAL_ITERATIONS  – numero totale di esecuzioni per query  (default: 10)
+    WARMUP_ITERATIONS – iterazioni di warm-up escluse dai dati (default:  0)
+    QUERIES_TO_RUN    – lista delle query da eseguire
 """
 
 import time
@@ -38,24 +32,27 @@ import os
 import sys
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONFIG – modifica qui se vuoi cambiare i parametri del benchmark
+# CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-TOTAL_ITERATIONS  = 20   # iterazioni totali per query
-WARMUP_ITERATIONS =  5   # iterazioni di warm-up (escluse dalla statistica)
-QUERIES_TO_RUN    = [1, 2, 3]  # quali query eseguire
+# Ogni iterazione include il boot della JVM
+TOTAL_ITERATIONS  = 15
+WARMUP_ITERATIONS =  0
+QUERIES_TO_RUN    = [1, 2, 3]
 
-# Dove scrivere il report finale
-BENCHMARK_REPORT_PATH = "/opt/output/benchmark_report.csv"
+BENCHMARK_REPORT_PATH = "/opt/output/benchmark_coldstart_report.csv"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Import query runner
+# Import
 # ─────────────────────────────────────────────────────────────────────────────
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+src_dir = os.path.join(project_root, "src")
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 from utils import get_spark_session
 
@@ -99,29 +96,45 @@ def compute_stats(values):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dispatch per ogni query
+# Singola iterazione con cold start
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _run_and_time_query(query_id, spark, save_output):
+def _run_cold_iteration(query_id, save_output):
     """
-    Chiama run_queryN con:
-      - save_output=False nelle warm-up  → nessuna scrittura, nessun output_s
-      - save_output=True  nelle valide   → misura anche la fase di output
+    Avvia una SparkSession, esegue la query, ferma la sessione.
+    Misura anche il tempo di startup e shutdown della JVM.
+    Restituisce il dict timings arricchito con:
+      - spark_start_s  : tempo di avvio SparkSession
+      - spark_stop_s   : tempo di shutdown SparkSession
+      - wall_total_s   : tempo wall totale incluso start/stop Spark
+    """
 
-    print_preview è sempre False per non inquinare wall_total_s.
-    """
+    # ── Avvio Spark ──────────────────────────────────────────────────────────
+    t_start = time.time()
+    spark = get_spark_session("SABD-Benchmark-Cold")
+    spark_start_s = round(time.time() - t_start, 3)
+
     wall_t0 = time.time()
 
-    if query_id == 1:
-        _, timings = run_query1(spark, save_output=save_output, print_preview=False)
-    elif query_id == 2:
-        _, _, timings = run_query2(spark, save_output=save_output, print_preview=False)
-    elif query_id == 3:
-        _, _, timings = run_query3(spark, save_output=save_output, print_preview=False)
-    else:
-        raise ValueError(f"Query {query_id} non supportata in questo benchmark.")
+    try:
+        if query_id == 1:
+            _, timings = run_query1(spark, save_output=save_output, print_preview=False)
+        elif query_id == 2:
+            _, _, timings = run_query2(spark, save_output=save_output, print_preview=False)
+        elif query_id == 3:
+            _, _, timings = run_query3(spark, save_output=save_output, print_preview=False)
+        else:
+            raise ValueError(f"Query {query_id} non supportata.")
+    finally:
+        # ── Stop Spark ───────────────────────────────────────────────────────
+        t_stop = time.time()
+        spark.stop()
+        spark_stop_s = round(time.time() - t_stop, 3)
 
-    timings["wall_total_s"] = round(time.time() - wall_t0, 3)
+    timings["spark_start_s"] = spark_start_s
+    timings["spark_stop_s"]  = spark_stop_s
+    timings["wall_total_s"]  = round(time.time() - wall_t0 + spark_start_s, 3)
+
     return timings
 
 
@@ -129,26 +142,16 @@ def _run_and_time_query(query_id, spark, save_output):
 # Funzione principale di benchmarking
 # ─────────────────────────────────────────────────────────────────────────────
 
-def benchmark_query(query_id, spark):
-    """
-    Esegue TOTAL_ITERATIONS esecuzioni della query `query_id`.
-
-    Warm-up (prime WARMUP_ITERATIONS):
-      - save_output=False → nessuna scrittura CSV
-      - i timings NON vengono raccolti
-
-    Iterazioni valide (le restanti):
-      - save_output=True → misura loading + computation + output
-      - i timings vengono raccolti per le statistiche finali
-    """
+def benchmark_query_cold(query_id):
     label = f"Query {query_id}"
     separator = "─" * 72
 
     print(f"\n{separator}")
-    print(f"  BENCHMARK {label}")
+    print(f"  BENCHMARK COLD START {label}")
     print(f"  Iterazioni totali:  {TOTAL_ITERATIONS}")
     print(f"  Warm-up (escluse):  {WARMUP_ITERATIONS}")
     print(f"  Iterazioni valide:  {TOTAL_ITERATIONS - WARMUP_ITERATIONS}")
+    print(f"  Nota: SparkSession riavviata a ogni iterazione")
     print(f"{separator}")
 
     collected_timings = []
@@ -159,23 +162,20 @@ def benchmark_query(query_id, spark):
         print(f"\n  {tag} Iterazione {i}/{TOTAL_ITERATIONS} – {label}")
 
         try:
-            # save_output=False nel warm-up, True nelle valide ──
-            timings = _run_and_time_query(query_id, spark, save_output=not is_warmup)
+            timings = _run_cold_iteration(query_id, save_output=not is_warmup)
         except Exception as exc:
             print(f"  [ERRORE] Iterazione {i} fallita: {exc}")
             continue
 
-        output_s = timings.get("output_s", 0.0)
         print(
-            f"         wall_total={timings.get('wall_total_s', '?'):.2f}s  |  "
+            f"         spark_start={timings.get('spark_start_s', '?'):.2f}s  |  "
             f"total_s={timings.get('total_s', '?'):.2f}s  |  "
-            f"output_s={output_s:.2f}s"
+            f"output_s={timings.get('output_s', 0.0):.2f}s  |  "
+            f"wall_total={timings.get('wall_total_s', '?'):.2f}s"
         )
 
         if not is_warmup:
             collected_timings.append(timings)
-
-    # ── Calcola statistiche per ogni fase ────────────────────────────────────
 
     if not collected_timings:
         print(f"\n  [WARN] Nessuna iterazione valida raccolta per {label}.")
@@ -195,10 +195,8 @@ def benchmark_query(query_id, spark):
         if values:
             stats_per_phase[phase] = compute_stats(values)
 
-    # ── Stampa tabella riepilogativa ─────────────────────────────────────────
-
     print(f"\n  {'─'*68}")
-    print(f"  STATISTICHE {label}  (su {len(collected_timings)} iterazioni valide)")
+    print(f"  STATISTICHE COLD START {label}  (su {len(collected_timings)} iterazioni valide)")
     print(f"  {'─'*68}")
     print(f"  {'Fase':<32} {'Media':>8} {'Std':>8} {'Mediana':>8} {'Min':>8} {'Max':>8}")
     print(f"  {'─'*68}")
@@ -238,7 +236,7 @@ def save_benchmark_report(all_results):
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"\n[✓] Report benchmark salvato in: {BENCHMARK_REPORT_PATH}")
+    print(f"\n[✓] Report cold start salvato in: {BENCHMARK_REPORT_PATH}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -248,7 +246,7 @@ def save_benchmark_report(all_results):
 def print_final_summary(all_results):
     sep = "=" * 72
     print(f"\n\n{sep}")
-    print("  RIEPILOGO FINALE BENCHMARK")
+    print("  RIEPILOGO FINALE – COLD START BENCHMARK")
     print(f"  Warm-up escluse: {WARMUP_ITERATIONS}  |  "
           f"Iterazioni valide per query: {TOTAL_ITERATIONS - WARMUP_ITERATIONS}")
     print(sep)
@@ -258,15 +256,16 @@ def print_final_summary(all_results):
             print(f"\n  Q{query_id}: nessun dato raccolto")
             continue
 
-        wall  = stats_per_phase.get("wall_total_s")
-        total = stats_per_phase.get("total_s")
-        out   = stats_per_phase.get("output_s")
+        wall    = stats_per_phase.get("wall_total_s")
+        total   = stats_per_phase.get("total_s")
+        out     = stats_per_phase.get("output_s")
+        startup = stats_per_phase.get("spark_start_s")
 
         print(f"\n  ── Query {query_id} ──────────────────────────────────────────")
-        if wall:
-            print(f"     End-to-end (wall):   "
-                  f"media={wall['mean_s']:.3f}s  std={wall['std_s']:.3f}s  "
-                  f"[{wall['min_s']:.3f}s – {wall['max_s']:.3f}s]")
+        if startup:
+            print(f"     Spark startup:       "
+                  f"media={startup['mean_s']:.3f}s  std={startup['std_s']:.3f}s  "
+                  f"[{startup['min_s']:.3f}s – {startup['max_s']:.3f}s]")
         if total:
             print(f"     Loading+Computation: "
                   f"media={total['mean_s']:.3f}s  std={total['std_s']:.3f}s  "
@@ -275,6 +274,10 @@ def print_final_summary(all_results):
             print(f"     Solo output:         "
                   f"media={out['mean_s']:.3f}s  std={out['std_s']:.3f}s  "
                   f"[{out['min_s']:.3f}s – {out['max_s']:.3f}s]")
+        if wall:
+            print(f"     End-to-end (wall):   "
+                  f"media={wall['mean_s']:.3f}s  std={wall['std_s']:.3f}s  "
+                  f"[{wall['min_s']:.3f}s – {wall['max_s']:.3f}s]")
 
     print(f"\n{sep}\n")
 
@@ -290,24 +293,20 @@ def main():
     )
 
     print("=" * 72)
-    print("  SABD Project 1 – Benchmark Query Spark")
+    print("  SABD Project 1 – Cold Start Benchmark")
     print(f"  Query da eseguire:  {QUERIES_TO_RUN}")
     print(f"  Iterazioni totali:  {TOTAL_ITERATIONS}")
     print(f"  Warm-up (escluse):  {WARMUP_ITERATIONS}")
     print(f"  Iterazioni valide:  {TOTAL_ITERATIONS - WARMUP_ITERATIONS}")
+    print(f"  SparkSession riavviata a ogni iterazione")
     print("=" * 72)
-
-    spark = get_spark_session("SABD-Benchmark")
 
     benchmark_start = time.time()
     all_results = {}
 
-    try:
-        for query_id in QUERIES_TO_RUN:
-            collected, stats = benchmark_query(query_id, spark)
-            all_results[query_id] = (collected, stats)
-    finally:
-        spark.stop()
+    for query_id in QUERIES_TO_RUN:
+        collected, stats = benchmark_query_cold(query_id)
+        all_results[query_id] = (collected, stats)
 
     total_benchmark_time = time.time() - benchmark_start
 
@@ -316,7 +315,7 @@ def main():
 
     print(f"Durata totale benchmark: {total_benchmark_time:.1f}s  "
           f"({total_benchmark_time / 60:.1f} minuti)")
-    print("[✓] Benchmark completato.\n")
+    print("[✓] Cold start benchmark completato.\n")
 
 
 if __name__ == "__main__":
