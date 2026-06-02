@@ -84,6 +84,47 @@ def extract_processing_data(df: pd.DataFrame, impl: str) -> pd.DataFrame:
     pieces = []
 
     for query in QUERIES:
+        if query == "Q2" and impl == "df":
+            all_airlines = df[
+                (df["query"] == query)
+                & (df["impl"] == impl)
+                & (df["phase"] == "all_airlines_computation_s")
+            ].copy()
+            top10 = df[
+                (df["query"] == query)
+                & (df["impl"] == impl)
+                & (df["phase"] == "top10_computation_s")
+            ].copy()
+
+            if all_airlines.empty or top10.empty:
+                print(
+                    f"[WARN] Missing processing rows for "
+                    f"query={query}, impl={impl}, phases="
+                    f"all_airlines_computation_s+top10_computation_s"
+                )
+                continue
+
+            join_columns = ["worker_count", "query", "impl"]
+            subset = all_airlines.merge(
+                top10[join_columns + ["mean_s"]],
+                on=join_columns,
+                suffixes=("_all_airlines", "_top10"),
+            )
+
+            if subset.empty:
+                print(
+                    f"[WARN] Cannot join Q2 df processing phases by worker_count"
+                )
+                continue
+
+            subset["mean_s"] = (
+                subset["mean_s_all_airlines"] + subset["mean_s_top10"]
+            )
+            subset["normalized_phase"] = "processing_s"
+            subset["source_phase"] = "all_airlines_computation_s+top10_computation_s"
+            pieces.append(subset)
+            continue
+
         source_phase = PROCESSING_PHASE_MAP.get((query, impl))
 
         if source_phase is None:

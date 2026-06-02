@@ -113,28 +113,40 @@ def compute_stats(values):
         "max_s":    round(max(values),     3),
     }
 
-def get_processing_phase_for_query(query_id, timings):
+def get_normalized_processing_time(query_id, impl, timings):
     """
-    Restituisce la fase principale di computazione da usare nel raw report.
-
-    Q1/Q2:
-      computation_s
-
-    Q3:
-      computation_percentiles_s, perché è la fase più significativa
-      della query sui percentili.
+    Return the normalized processing time for the full logical query.
+    This value is used only for the raw iterations summary.
     """
-    if query_id in (1, 2):
-        return "computation_s"
+    if query_id == 1:
+        return timings.get("computation_s")
+
+    if query_id == 2:
+        if impl == "df":
+            all_airlines = timings.get("all_airlines_computation_s")
+            top10 = timings.get("top10_computation_s")
+
+            if all_airlines is not None and top10 is not None:
+                return round(float(all_airlines) + float(top10), 3)
+
+            missing = []
+            if all_airlines is None:
+                missing.append("all_airlines_computation_s")
+            if top10 is None:
+                missing.append("top10_computation_s")
+            print(
+                "  [WARN] Q2 df processing_s non disponibile: mancano "
+                + ", ".join(missing)
+                + ". timings="
+                + str(timings)
+            )
+            return None
+
+        if impl == "rdd":
+            return timings.get("computation_s")
 
     if query_id == 3:
-        if "computation_percentiles_s" in timings:
-            return "computation_percentiles_s"
-        if "computation_s" in timings:
-            return "computation_s"
-
-    if "computation_s" in timings:
-        return "computation_s"
+        return timings.get("computation_percentiles_s")
 
     return None
 
@@ -303,18 +315,23 @@ def benchmark_one(query_id, impl, spark):
                     "time_s": timings["end_to_end_s"],
                 })
 
-            # Raw timing per box plot: processing principale
-            processing_phase = get_processing_phase_for_query(query_id, timings)
+            # Raw timing per box plot: processing normalizzato
+            processing_time = get_normalized_processing_time(query_id, impl, timings)
 
-            if processing_phase is not None and processing_phase in timings:
+            if processing_time is not None:
                 raw_rows.append({
                     "worker_count": WORKER_COUNT,
                     "query": "Q" + str(query_id),
                     "impl": impl,
                     "iteration": valid_count,
                     "phase": "processing_s",
-                    "time_s": timings[processing_phase],
+                    "time_s": processing_time,
                 })
+            else:
+                print(
+                    f"  [WARN] processing_s not available for "
+                    f"Q{query_id} {impl}. timings={timings}"
+                )
 
     if not collected:
         print(f"\n  [WARN] Nessuna iterazione valida per {label}.")
