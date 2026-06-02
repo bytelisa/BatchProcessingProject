@@ -1,13 +1,14 @@
 """
 plot_benchmark_boxplots.py
 
-Generate a 2x3 grid of end-to-end benchmark box plots from raw iteration data.
+Generate 2x3 grids of benchmark box plots from raw iteration data.
 
 Input:
   output/benchmarks/benchmark_raw_iterations_summary.csv
 
 Output:
   plots/benchmark_plots/boxplot_end_to_end_distribution_grid.png
+  plots/benchmark_plots/boxplot_processing_distribution_grid.png
 """
 
 from pathlib import Path
@@ -23,8 +24,14 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 INPUT_CSV = PROJECT_ROOT / "output" / "benchmarks" / "benchmark_raw_iterations_summary.csv"
 OUTPUT_DIR = PROJECT_ROOT / "plots" / "benchmark_plots"
-OUTPUT_PATH = OUTPUT_DIR / "boxplot_end_to_end_distribution_grid.png"
-DISPLAY_OUTPUT_PATH = "output/benchmark_plots/boxplot_end_to_end_distribution_grid.png"
+END_TO_END_OUTPUT_PATH = OUTPUT_DIR / "boxplot_end_to_end_distribution_grid.png"
+PROCESSING_OUTPUT_PATH = OUTPUT_DIR / "boxplot_processing_distribution_grid.png"
+DISPLAY_END_TO_END_OUTPUT_PATH = (
+    "output/benchmark_plots/boxplot_end_to_end_distribution_grid.png"
+)
+DISPLAY_PROCESSING_OUTPUT_PATH = (
+    "output/benchmark_plots/boxplot_processing_distribution_grid.png"
+)
 
 QUERIES = ["Q1", "Q2", "Q3"]
 IMPLEMENTATIONS = ["df", "rdd"]
@@ -75,15 +82,36 @@ def read_raw_iterations(path):
     return df
 
 
-def filter_end_to_end_rows(raw_df):
+def filter_phase_rows(raw_df, phase):
     return raw_df[
-        (raw_df["phase"] == "end_to_end_s")
+        (raw_df["phase"] == phase)
         & (raw_df["query"].isin(QUERIES))
         & (raw_df["impl"].isin(IMPLEMENTATIONS))
     ].copy()
 
 
-def get_worker_box_data(filtered_df, query, impl, workers):
+def warn_missing_phase_combinations(raw_df, phase):
+    phase_df = filter_phase_rows(raw_df, phase)
+
+    for query in QUERIES:
+        for impl in IMPLEMENTATIONS:
+            subset = phase_df[
+                (phase_df["query"] == query)
+                & (phase_df["impl"] == impl)
+            ]
+            if subset.empty:
+                print(
+                    "[WARN] Missing "
+                    + phase
+                    + " rows for query="
+                    + query
+                    + ", impl="
+                    + impl
+                    + "."
+                )
+
+
+def get_worker_box_data(filtered_df, phase, query, impl, workers):
     data = []
     positions = []
 
@@ -111,6 +139,18 @@ def get_worker_box_data(filtered_df, query, impl, workers):
                     + str(len(values))
                     + "); box plot may be weak."
                 )
+        else:
+            print(
+                "[WARN] Missing data for phase="
+                + phase
+                + ", query="
+                + query
+                + ", impl="
+                + impl
+                + ", worker_count="
+                + str(worker_count)
+                + "."
+            )
 
     return data, positions
 
@@ -141,11 +181,11 @@ def draw_boxplot(ax, data, positions, color):
         box.set_edgecolor("#333333")
 
 
-def setup_subplot(ax, query, impl, workers):
+def setup_subplot(ax, query, impl, workers, y_label):
     worker_positions = list(range(1, len(workers) + 1))
 
     ax.set_title(query + " - " + IMPL_LABELS[impl], fontsize=12, pad=8)
-    ax.set_ylabel("Execution time (s)", fontsize=10)
+    ax.set_ylabel(y_label, fontsize=10)
     ax.set_xlabel("Number of workers", fontsize=10)
     ax.set_xticks(worker_positions)
     ax.set_xticklabels([str(worker_count) + "W" for worker_count in workers])
@@ -153,11 +193,11 @@ def setup_subplot(ax, query, impl, workers):
     ax.set_axisbelow(True)
 
 
-def plot_end_to_end_boxplot_grid(raw_df, output_path):
-    filtered_df = filter_end_to_end_rows(raw_df)
+def plot_boxplot_grid(raw_df, phase, output_path, figure_title, y_label):
+    filtered_df = filter_phase_rows(raw_df, phase)
 
     if filtered_df.empty:
-        print("[WARN] No end_to_end_s benchmark data available; skipping plot.")
+        print("[WARN] No " + phase + " benchmark data available; skipping plot.")
         return False
 
     workers = sorted(filtered_df["worker_count"].unique().tolist())
@@ -166,15 +206,16 @@ def plot_end_to_end_boxplot_grid(raw_df, output_path):
         return False
 
     fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(14.5, 8.0), sharey=False)
-    fig.suptitle("End-to-end execution time distribution", fontsize=16, y=0.98)
+    fig.suptitle(figure_title, fontsize=16, y=0.98)
 
     for row_index, impl in enumerate(IMPLEMENTATIONS):
         for col_index, query in enumerate(QUERIES):
             ax = axes[row_index, col_index]
-            setup_subplot(ax, query, impl, workers)
+            setup_subplot(ax, query, impl, workers, y_label)
 
             data, positions = get_worker_box_data(
                 filtered_df=filtered_df,
+                phase=phase,
                 query=query,
                 impl=impl,
                 workers=workers,
@@ -199,19 +240,38 @@ def plot_end_to_end_boxplot_grid(raw_df, output_path):
 
 def main():
     print("=" * 72)
-    print("Benchmark end-to-end box plot grid generation")
+    print("Benchmark box plot grid generation")
     print("=" * 72)
     print("[INFO] Project root: " + str(PROJECT_ROOT))
     print("[INFO] Input CSV:  " + str(INPUT_CSV))
-    print("[INFO] Output PNG: " + str(OUTPUT_PATH))
+    print("[INFO] End-to-end output PNG: " + str(END_TO_END_OUTPUT_PATH))
+    print("[INFO] Processing output PNG: " + str(PROCESSING_OUTPUT_PATH))
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     raw_df = read_raw_iterations(INPUT_CSV)
-    generated = plot_end_to_end_boxplot_grid(raw_df, OUTPUT_PATH)
+    generated_end_to_end = plot_boxplot_grid(
+        raw_df=raw_df,
+        phase="end_to_end_s",
+        output_path=END_TO_END_OUTPUT_PATH,
+        figure_title="End-to-end execution time distribution",
+        y_label="Execution time (s)",
+    )
 
-    if generated:
-        print("[OK] Saved " + str(DISPLAY_OUTPUT_PATH))
+    if generated_end_to_end:
+        print("[OK] Saved " + str(DISPLAY_END_TO_END_OUTPUT_PATH))
+
+    warn_missing_phase_combinations(raw_df, "processing_s")
+    generated_processing = plot_boxplot_grid(
+        raw_df=raw_df,
+        phase="processing_s",
+        output_path=PROCESSING_OUTPUT_PATH,
+        figure_title="Processing time distribution",
+        y_label="Processing time (s)",
+    )
+
+    if generated_processing:
+        print("[OK] Saved " + str(DISPLAY_PROCESSING_OUTPUT_PATH))
 
 
 if __name__ == "__main__":
