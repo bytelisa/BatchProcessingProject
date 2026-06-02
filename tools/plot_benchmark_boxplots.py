@@ -121,7 +121,7 @@ def draw_boxplot(ax, data, positions, color):
         positions=positions,
         widths=0.45,
         patch_artist=True,
-        showfliers=True,
+        showfliers=False,
         medianprops={"color": "#d62728", "linewidth": 1.6},
         boxprops={"linewidth": 1.1},
         whiskerprops={"linewidth": 1.0},
