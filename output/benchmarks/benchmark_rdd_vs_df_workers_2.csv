@@ -1,0 +1,31 @@
+worker_count,query,impl,algorithm,phase,n,mean_s,std_s,median_s,min_s,max_s,total_iterations,warmup_iterations,valid_iterations,note
+2,Q1,df,groupBy+agg,loading_s,15,0.107,0.014,0.111,0.087,0.128,20,5,15,computation_only
+2,Q1,df,groupBy+agg,filtering_s,15,0.012,0.004,0.011,0.009,0.02,20,5,15,computation_only
+2,Q1,df,groupBy+agg,computation_s,15,0.458,0.04,0.446,0.392,0.554,20,5,15,computation_only
+2,Q1,df,groupBy+agg,output_s,15,1.149,0.17,1.035,0.968,1.477,20,5,15,includes_output
+2,Q1,df,groupBy+agg,end_to_end_s,15,1.725,0.21,1.66,1.501,2.121,20,5,15,includes_output
+2,Q1,rdd,combineByKey,loading_s,15,0.124,0.024,0.117,0.101,0.196,20,5,15,computation_only
+2,Q1,rdd,combineByKey,computation_s,15,8.832,0.341,8.799,8.422,9.604,20,5,15,computation_only
+2,Q1,rdd,combineByKey,output_s,15,0.529,0.469,0.347,0.295,2.104,20,5,15,includes_output
+2,Q1,rdd,combineByKey,end_to_end_s,15,9.487,0.682,9.31,8.94,11.616,20,5,15,includes_output
+2,Q2,df,groupBy+agg,loading_s,15,0.095,0.019,0.088,0.077,0.143,20,5,15,computation_only
+2,Q2,df,groupBy+agg,all_airlines_computation_s,15,0.263,0.025,0.259,0.223,0.306,20,5,15,computation_only
+2,Q2,df,groupBy+agg,top10_computation_s,15,0.217,0.021,0.214,0.185,0.255,20,5,15,computation_only
+2,Q2,df,groupBy+agg,output_s,15,0.847,0.173,0.83,0.662,1.137,20,5,15,includes_output
+2,Q2,df,groupBy+agg,end_to_end_s,15,1.421,0.166,1.399,1.222,1.777,20,5,15,includes_output
+2,Q2,rdd,combineByKey,loading_s,15,0.103,0.018,0.098,0.092,0.164,20,5,15,computation_only
+2,Q2,rdd,combineByKey,filtering_s,15,0.01,0.003,0.009,0.007,0.018,20,5,15,computation_only
+2,Q2,rdd,combineByKey,computation_s,15,12.04,0.388,12.1,11.383,12.863,20,5,15,computation_only
+2,Q2,rdd,combineByKey,output_s,15,0.764,0.252,0.619,0.588,1.448,20,5,15,includes_output
+2,Q2,rdd,combineByKey,end_to_end_s,15,12.922,0.558,12.927,12.111,13.99,20,5,15,includes_output
+2,Q3,df,"percentile_approx (Greenwald-Khanna, Spark native)",loading_s,15,0.088,0.011,0.084,0.078,0.115,20,5,15,computation_only
+2,Q3,df,"percentile_approx (Greenwald-Khanna, Spark native)",filtering_s,15,0.057,0.011,0.054,0.046,0.086,20,5,15,computation_only
+2,Q3,df,"percentile_approx (Greenwald-Khanna, Spark native)",computation_percentiles_s,15,0.863,0.062,0.858,0.778,0.958,20,5,15,computation_only
+2,Q3,df,"percentile_approx (Greenwald-Khanna, Spark native)",computation_minmax_s,15,0.163,0.019,0.159,0.145,0.208,20,5,15,computation_only
+2,Q3,df,"percentile_approx (Greenwald-Khanna, Spark native)",output_s,15,3.404,0.228,3.39,2.983,3.77,20,5,15,includes_output
+2,Q3,df,"percentile_approx (Greenwald-Khanna, Spark native)",end_to_end_s,15,4.577,0.239,4.508,4.29,4.984,20,5,15,includes_output
+2,Q3,rdd,"t-digest (aggregateByKey, merge sul driver)",loading_s,15,0.105,0.016,0.102,0.09,0.146,20,5,15,computation_only
+2,Q3,rdd,"t-digest (aggregateByKey, merge sul driver)",computation_percentiles_s,15,13.57,1.008,13.944,11.788,15.24,20,5,15,computation_only
+2,Q3,rdd,"t-digest (aggregateByKey, merge sul driver)",computation_minmax_s,15,0.967,0.157,0.901,0.788,1.408,20,5,15,computation_only
+2,Q3,rdd,"t-digest (aggregateByKey, merge sul driver)",output_s,15,1.094,1.107,0.743,0.597,5.042,20,5,15,includes_output
+2,Q3,rdd,"t-digest (aggregateByKey, merge sul driver)",end_to_end_s,15,15.739,1.767,15.966,13.27,20.807,20,5,15,includes_output
