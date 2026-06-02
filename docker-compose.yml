@@ -61,8 +61,8 @@ services:
       - PYSPARK_PYTHON=python3
       - PYSPARK_DRIVER_PYTHON=python3
       - PYTHONPATH=/opt/scripts:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip
-      - SPARK_WORKER_MEMORY=3g
-      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=1
     command: [ "/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077" ]
     depends_on:
       - spark-master

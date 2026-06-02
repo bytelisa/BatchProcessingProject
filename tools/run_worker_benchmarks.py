@@ -34,7 +34,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "src", "benchmark_config.json")
 
-SPARK_MASTER_JSON_URL = "http://localhost:8080/json"
+SPARK_MASTER_JSON_URL = "http://localhost:8080/json/"
 
 SUMMARY_PATH = "output/benchmarks/benchmark_scaling_summary.csv"
 

@@ -36,7 +36,7 @@ def get_spark_session(app_name: str) -> SparkSession:
         .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
         # evita warning inutili
         .config("spark.sql.adaptive.enabled", "true")
-        .config("spark.executor.memory", "2g")  # aggiunta
+        .config("spark.executor.memory", "1g")  # aggiunta
         .config("spark.driver.memory", "1g")  # aggiunta
         .config("spark.network.timeout", "600s")  # aggiunta
         .config("spark.executor.heartbeatInterval", "60s")  # aggiunta
