@@ -1,7 +1,7 @@
 """
 query3_rdd.py
 ─────────────
-Query 3 - SABD Project 1 — Implementazione RDD + t-digest
+Query 3 — Implementazione RDD + t-digest
 
 Usa mapPartitions per costruire un TDigest locale per partizione,
 poi raccoglie i digest sul driver e li fonde con update_centroids_from_list.

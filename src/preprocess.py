@@ -1,7 +1,7 @@
 """
 preprocess.py
 ─────────────
-Preprocessing generale per SABD Project 1.
+Preprocessing generale
 
 Trasforma i CSV raw caricati su HDFS in un dataset Parquet processed.
 

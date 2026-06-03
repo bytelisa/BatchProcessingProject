@@ -1,163 +1,274 @@
-# Batch Processing Project - American Flights Analysis
-Un progetto di Valentina Jin ed Elisa Marzioli.
+# Batch Processing Pipeline — US Flight Data Analysis
 
-Requisiti:
-- Docker
-- Docker Compose
+**Progetto 1 — SABD 2025/26 | Università Tor Vergata**
+Valentina Jin · Elisa Marzioli
 
-Avvio dei container:
-## 1. Launch the containers
+---
 
-```bash
-docker-compose up -d
-docker-compose up -d namenode datanode nifi # per vale (solo nodi nifi, hadoop)
-docker compose up -d namenode datanode spark-master spark-worker
+## Descrizione
+
+Questo progetto presenta una pipeline di batch processing per l’analisi di circa 2,2 milioni di record sui voli aerei 
+statunitensi (gennaio–aprile 2025), forniti dal BTS. L’architettura containerizzata tramite Docker Compose orchestra i 
+componenti Apache NiFi, HDFS, Apache Spark (PySpark), Redis e Grafana, con Apache Airflow come strumento di orchestrazione. 
+Vengono implementate tre query analitiche sui ritardi e le cancellazioni dei voli.
+
+Tre query analitiche sono implementate sia con l'API **DataFrame** che con l'API **RDD** di Spark, per confronto di performance:
+
+| Query | Descrizione                                                                                                                               |
+|-------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| **Q1** | Statistiche mensili per compagnie aeree AA e DL (ritardi medi/min/max, cancellazioni medi).                                               |
+| **Q2** | Top-10 compagnie per ritardo medio, con breakdown delle cause.                                                                            |
+| **Q3** | Percentili di ritardo alla partenza (P25/P50/P75/P90) per compagnia e fascia oraria, per AA, DL, UA, WN. Min/Max per ritardo di partenza. |
+
+---
+
+## Architettura
+
+```
+URL BTS → NiFi → HDFS (CSV raw)
+                     ↓
+              Spark Preprocessing → Parquet 
+                     ↓
+         ┌───────────┼───────────┐
+        Q1          Q2          Q3
+         └───────────┼───────────┘
+                     ↓
+                   Redis
+                     ↓
+                  Grafana (dashboard)
 ```
 
-## 2. Initialize HDFS directories and permits for NiFi
-todo: automatizzare questi step con Docker compose!!
+**Stack tecnologico:**
+
+| Componente | Versione | Porta |
+|---|---|---|
+| Apache Spark | 3.5.3 | 8080 (UI), 7077 |
+| Apache Hadoop HDFS | 3.2.1 | 9870 (UI), 9000 |
+| Apache NiFi | 1.23.2 | 9090 |
+| Apache Airflow | 2.9.0 | 8081 |
+| Redis | 7.2.0 | 6379 |
+| Grafana | 10.4.0 | 3000 |
+
+---
+
+## Prerequisiti
+
+- Docker
+- Docker Compose
+- WSL2 (se su Windows)
+
+---
+
+## Avvio
+
+### 1. Build e avvio dei container
 
 ```bash
+docker compose up -d
+```
 
-docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights
+Per avviare solo i servizi Spark (utile per esecuzione manuale degli script):
+
+```bash
+docker compose up -d spark-master spark-worker
+docker compose ps   # verifica che siano pronti
+```
+
+### 2. Inizializzazione HDFS
+
+Da eseguire una sola volta dopo il primo avvio:
+
+```bash
+# Struttura delle directory
 docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights/archive
 docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights/csv
 docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights/parquet
-```
-
-Per controllare il contenuto delle cartelle
-```bash
- docker compose exec namenode hdfs dfs -ls /data/raw/flights/csv
-```
-
-```bash
-docker compose exec namenode hdfs dfs -chown -R nifi:supergroup /data/raw/flights
-```
-
-```bash
-docker compose exec namenode hdfs dfs -chmod -R 755 /data/raw/flights
-```
-And for Spark as well:
-```bash
-docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights
-docker compose exec namenode hdfs dfs -mkdir -p /data/raw/flights/csv
 docker compose exec namenode hdfs dfs -mkdir -p /data/output/flights
 
+# Permessi per NiFi
+docker compose exec namenode hdfs dfs -chown -R nifi:supergroup /data/raw/flights
+docker compose exec namenode hdfs dfs -chmod -R 755 /data/raw/flights
+
+# Permessi per Spark
 docker compose exec namenode hdfs dfs -chmod -R 777 /data/processed
 docker compose exec namenode hdfs dfs -chmod -R 777 /data/output
 docker compose exec namenode hdfs dfs -chmod -R 777 /data/raw/flights/csv
-docker compose exec namenode hdfs dfs -mkdir -p /data/processed/flights
-docker compose exec namenode hdfs dfs -mkdir -p /data/output/flights
-docker compose exec namenode hdfs dfs -chmod -R 777 /data/processed/flights
-docker compose exec namenode hdfs dfs -chmod -R 777 /data/output/flights
-
 ```
 
-## 3. Open NiFi web UI
+Per verificare il contenuto di una directory:
+
 ```bash
+docker compose exec namenode hdfs dfs -ls /data/raw/flights/csv
+```
+
+### 3. NiFi — Ingestione dati
+
+Aprire la UI NiFi nel browser:
+
+```
 http://localhost:9090/nifi/
 ```
 
-## 4. Spark
-Attivo due nodi Spark
-```bash
-docker compose up -d spark-master spark-worker # per vale 
-docker compose ps # per verificare se sono pronti
-```
+Caricare il flow `nifi/flows/sabd-ingest-flights-to-hdfs.json` e avviare il Process Group per scaricare i file `.tar.gz` dal BTS e depositarli su HDFS come CSV.
 
-Comando per avviare utilis.py
-```bash
-docker compose exec spark-master /opt/spark/bin/spark-submit \
-  --master spark://spark-master:7077 \
-  /opt/scripts/utils.py
-```
-oppure
-```bash
-./run.sh utils.py
-```
+### 4. Airflow — Pipeline end-to-end
 
-## 5. Airflow (pipeline end-to-end)
-Comando per avviare airflow
+Airflow orchestra l'intera pipeline (NiFi → Spark preprocessing → Query → Redis export).
+
 ```bash
 chmod +x airflow/start.sh
 docker compose up -d airflow
 ```
-Comando per dare i permessi per usare socket docker senza fermare esecuzione (non persistente)
-La versione persistente è risolto con start.sh
-```bash
-docker compose exec --user root airflow chmod 666 /var/run/docker.sock
-```
 
-# Entra nel container
+La UI Airflow è disponibile su `http://localhost:8081`.
+
+**Comandi utili:**
+
 ```bash
+# Accedere al container
 docker exec -it batchprocessingproject-airflow-1 bash
-```
 
-# Lista i DAG run attivi
-```bash
+# Verificare i DAG run
 airflow dags list-runs -d sabd_project1_pipeline
-```
 
-# Ferma un DAG run specifico
-```bash
+# Sospendere il DAG
 airflow dags pause sabd_project1_pipeline
 ```
 
-# Oppure marca come failed un task specifico
-```bash
-airflow tasks failed sabd_project1_pipeline spark_preprocessing <execution_date>
-```
-## 6. Esecuzione preprocess manuale
-```bash
-    docker compose exec spark-master /opt/spark/bin/spark-submit \
-        --master spark://spark-master:7077 \
-        /opt/scripts/preprocess.py
-```
 
-## 7. Esecuzione query manuale
+### 5. Grafana — Visualizzazione
+
+Aprire la UI Grafana su `http://localhost:3000`.
+
+I dashboard per Q1, Q2, Q3 e i benchmark sono pre-configurati e si alimentano da Redis.
+
+---
+
+## Esecuzione manuale degli script Spark
+
+Il file `run.sh` è una shortcut per `spark-submit` nel container del master:
+
 ```bash
-    docker compose exec spark-master /opt/spark/bin/spark-submit \
-        --master spark://spark-master:7077 \
-        /opt/scripts/query1.py
-```
-
-## 8. Esecuzione query 3 bis
-```bash
-# Installazione le dipendenze e librerie su Docker
-# Master
-docker compose exec --user root spark-master pip install tdigest
-docker compose exec --user root spark-master pip install pandas pyarrow
-
-# Worker
-docker compose exec --user root spark-worker pip install tdigest
-docker compose exec --user root spark-worker pip install pandas pyarrow
-
-./run.sh query3_bis.py
+./run.sh <script.py>
 ```
 
+**Preprocessing:**
 
+```bash
+./run.sh preprocess.py
+```
 
-## Ripulire task airflow
-docker compose exec airflow airflow db shell
+**Query individuali (DataFrame API):**
 
-UPDATE dag_run
-SET state = 'failed',
-    end_date = datetime('now')
-WHERE dag_id = 'sabd_project1_pipeline'
-  AND state IN ('running', 'queued');
+```bash
+./run.sh query1.py
+./run.sh query2.py
+./run.sh query3.py
+```
 
-UPDATE task_instance
-SET state = 'failed',
-    end_date = datetime('now')
-WHERE dag_id = 'sabd_project1_pipeline'
-  AND state IN (
-    'running',
-    'queued',
-    'scheduled',
-    'up_for_retry',
-    'up_for_reschedule',
-    'deferred',
-    'restarting'
-  );
+**Query con RDD API:**
 
-.quit
+```bash
+./run.sh query1_rdd.py
+./run.sh query2_rdd.py
+./run.sh query3_rdd.py
+```
+
+In alternativa, il comando completo `spark-submit`:
+
+```bash
+docker compose exec spark-master /opt/spark/bin/spark-submit \
+  --master spark://spark-master:7077 \
+  /opt/scripts/<script.py>
+```
+
+---
+
+## Benchmarking
+
+NOTA: Il `benchmark_rdd_vs_df` misura le performance di DataFrame vs RDD su 20 iterazioni (5 warm-up + 15 valide), variando anche il numero di worker (1, 2, 3, 4).
+
+```bash
+# Benchmark DataFrame per Q1, Q2, Q3 con warm-up
+./run.sh benchmark.py
+
+# Benchmark DataFrame vs RDD per Q1, Q2, Q3 con warm-up
+./run.sh benchmark_rdd_vs_df.py
+
+# Benchmark specifico per Q3 (percentile_approx vs t-digest) con warm-up
+./run.sh benchmark_q3.py
+
+# Benchmark con cold start (15 iterazioni valide)
+./run.sh benchmark_coldstart.py
+```
+
+Le fasi misurate sono: `loading_s`, `computation_s`, `output_csv_local_s`, `output_csv_hdfs_s`, `end_to_end_s`.
+
+I risultati vengono salvati in `/opt/output/benchmarks/` e poi esportati su Redis per la visualizzazione in Grafana.
+
+**Plot dei risultati:**
+
+```bash
+python tools/plot_benchmark_boxplots.py
+python tools/plot_benchmark_scaling.py
+```
+
+---
+
+## Struttura del progetto
+
+```
+BatchProcessingProject/
+├── airflow/
+│   ├── dags/
+│   │   └── sabd_pipeline.py        # DAG Airflow principale
+│   ├── logs/                       # Log delle esecuzioni
+│   └── start.sh                    # Script di avvio Airflow
+├── grafana/
+│   ├── dashboards/                 # JSON dei dashboard (Q1, Q2, Q3, benchmark)
+│   └── provisioning/               # Configurazione automatica datasource Redis
+├── nifi/
+│   ├── flows/                      # Flow NiFi esportati
+│   └── hadoop-conf/                # core-site.xml, hdfs-site.xml per NiFi
+├── src/
+│   ├── config.py                   # Path HDFS e output centralizzati
+│   ├── preprocess.py               # Preprocessing CSV → Parquet
+│   ├── query1.py / query1_rdd.py   # Q1: statistiche mensili per airline
+│   ├── query2.py / query2_rdd.py   # Q2: top-10 airline per ritardo
+│   ├── query3.py / query3_rdd.py   # Q3: percentili ritardo per airline e ora
+│   ├── utils.py                    # Utilità condivise
+│   ├── benchmark.py                # Framework di benchmarking base
+│   ├── benchmark_rdd_vs_df.py      # Benchmark DataFrame vs RDD
+│   ├── benchmark_q3.py             # Benchmark Q3 (percentile_approx vs t-digest)
+│   ├── benchmark_coldstart.py      # Benchmark con cold start
+│   ├── benchmark_config.py/.json   # Parametri del benchmark
+│   ├── export_output_to_redis.py   # Esportazione risultati query → Redis
+│   └── export_benchmark_to_redis.py# Esportazione risultati benchmark → Redis
+├── tools/
+│   ├── plot_benchmark_boxplots.py  # Boxplot comparativi DF vs RDD
+│   ├── plot_benchmark_scaling.py   # Grafici di scaling per numero di worker
+│   └── run_worker_benchmarks.py    # Esecuzione benchmark al variare dei worker
+├── utility/
+│   ├── dataset_quality_check.py    # Analisi qualità dataset BTS
+│   ├── check_missing_delay_causes.py
+│   ├── check_wn_night_flights.py
+│   └── compare_query_ouputs.py     # Confronto output DF vs RDD
+├── docker-compose.yml
+├── Dockerfile                      # Immagine Spark custom (+ tdigest, pandas, redis)
+├── hadoop.env                      # Variabili d'ambiente Hadoop
+├── run.sh                          # Shortcut spark-submit
+└── README.md
+```
+
+---
+
+## Note implementative
+
+**Preprocessing:** la colonna `HOUR` viene derivata da `CRS_DEP_TIME` tramite divisione intera per 100. Il Parquet è partizionato per `OP_UNIQUE_CARRIER` per abilitare il partition pruning su tutte le query. I valori NULL nelle colonne di causa ritardo sono trattati come 0 (il BTS li registra solo quando `ARR_DELAY > 15`).
+
+**Q3 — Scelta dell'algoritmo:**
+- DataFrame API: `percentile_approx` (algoritmo Greenwald-Khanna, nativo Spark, ottimizzato da Catalyst)
+- RDD API: t-digest (`tdigest==0.5.2.2`) via `mapPartitions` + merge manuale con `update_centroids_from_list`
+
+I due metodi producono valori numericamente vicini (differenza < 1 minuto), ma semanticamente diversi: `percentile_approx` restituisce sempre un valore osservato nel dataset, mentre t-digest interpola tra i centroidi.
+

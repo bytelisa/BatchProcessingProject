@@ -1,7 +1,7 @@
 """
 query1_rdd.py
 ─────────────
-Query 1 - SABD Project 1 — Implementazione con RDD
+Query 1 — Implementazione con RDD
 
 Per le compagnie AA e DL, aggregare i dati su base mensile e calcolare:
 - statistiche DEP_DELAY sui soli voli non cancellati: mean, min, max
@@ -117,22 +117,6 @@ def run_query1_rdd(spark, save_output=True, print_preview=True):
       print_preview — se False salta la stampa dell'anteprima a console
                       (benchmark: evita di inquinare wall_total_s)
 
-    Strategia a due rami + join:
-    ┌─────────────────────────────┐
-    │  Ramo 1: delay stats        │  solo voli NON cancellati
-    │  combineByKey → (sum,min,   │  → mean/min/max DEP e ARR
-    │                  max, count)│
-    └────────────┬────────────────┘
-                 │ join su (month, carrier)
-    ┌────────────┴────────────────┐
-    │  Ramo 2: cancel rate        │  TUTTI i voli
-    │  reduceByKey → (n_canc,     │  → cancellation_rate %
-    │                 n_tot)      │
-    └─────────────────────────────┘
-
-    combineByKey è preferibile a groupByKey perché aggrega parzialmente
-    all'interno di ogni partizione PRIMA del shuffle, riducendo i dati
-    trasferiti in rete tra i nodi.
     """
 
     timings = {}

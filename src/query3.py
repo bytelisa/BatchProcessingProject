@@ -1,7 +1,7 @@
 """
 query3.py
 ─────────
-Query 3 - SABD Project 1
+Query 3 - Implementazione con Dataframe
 
 Per le compagnie AA (American Airlines), DL (Delta), UA (United), WN (Southwest):
 
