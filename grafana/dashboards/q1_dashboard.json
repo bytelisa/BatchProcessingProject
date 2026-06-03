@@ -19,7 +19,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
   "links": [],
   "panels": [
     {
@@ -37,7 +36,7 @@
             "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "dep_delay (min)",
+            "axisLabel": "Departure Delay (min)",
             "axisPlacement": "auto",
             "fillOpacity": 86,
             "gradientMode": "hue",
@@ -46,7 +45,7 @@
               "tooltip": false,
               "viz": false
             },
-            "lineWidth": 10,
+            "lineWidth": 0,
             "scaleDistribution": {
               "type": "linear"
             },
@@ -70,9 +69,48 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "m"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AA"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DL"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "none"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -80,7 +118,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 5,
+      "id": 9,
       "options": {
         "barRadius": 0,
         "barWidth": 0.83,
@@ -99,6 +137,9 @@
         "orientation": "horizontal",
         "showValue": "auto",
         "stacking": "none",
+        "text": {
+          "valueSize": 12
+        },
         "tooltip": {
           "mode": "single",
           "sort": "none"
@@ -136,7 +177,7 @@
           "type": "timeSeries"
         }
       ],
-      "title": "Monthly Average Departure Delay: AA vs DL",
+      "title": "Monthly Average Departure Delay: American Airlines vs Delta Airlines",
       "transformations": [
         {
           "id": "joinByField",
@@ -300,7 +341,7 @@
           "type": "timeSeries"
         }
       ],
-      "title": "Monthly Average Cancellation Rate: AA vs DL",
+      "title": "Monthly Average Cancellation Rate: American Airlines vs Delta Airlines",
       "transformations": [
         {
           "id": "joinByField",
@@ -335,7 +376,7 @@
             "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "dep_delay (min)",
+            "axisLabel": "Departure Delay (min)",
             "axisPlacement": "auto",
             "fillOpacity": 86,
             "gradientMode": "hue",
@@ -368,7 +409,7 @@
               }
             ]
           },
-          "unit": "none"
+          "unit": "m"
         },
         "overrides": []
       },
@@ -378,12 +419,12 @@
         "x": 0,
         "y": 8
       },
-      "id": 4,
+      "id": 5,
       "options": {
         "barRadius": 0,
-        "barWidth": 0.81,
+        "barWidth": 0.83,
         "fullHighlight": false,
-        "groupWidth": 0.59,
+        "groupWidth": 0.7,
         "legend": {
           "calcs": [
             "min",
@@ -394,9 +435,12 @@
           "placement": "bottom",
           "showLegend": true
         },
-        "orientation": "vertical",
+        "orientation": "horizontal",
         "showValue": "auto",
         "stacking": "none",
+        "text": {
+          "valueSize": 12
+        },
         "tooltip": {
           "mode": "single",
           "sort": "none"
@@ -626,42 +670,33 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-BlYlRd",
-            "seriesBy": "last"
+            "fixedColor": "#FF7383",
+            "mode": "continuous-YlBl"
           },
           "custom": {
             "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "dep_delay",
+            "axisLabel": "dep_delay (min)",
             "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
+            "fillOpacity": 86,
+            "gradientMode": "hue",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 9,
+            "lineWidth": 0,
             "scaleDistribution": {
               "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
             }
           },
+          "fieldMinMax": false,
           "mappings": [],
+          "max": 17,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -675,7 +710,7 @@
               }
             ]
           },
-          "unit": "m"
+          "unit": "none"
         },
         "overrides": []
       },
@@ -685,18 +720,32 @@
         "x": 0,
         "y": 16
       },
-      "id": 1,
+      "id": 4,
       "options": {
+        "barRadius": 0,
+        "barWidth": 0.81,
+        "fullHighlight": false,
+        "groupWidth": 0.59,
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "min",
+            "max",
+            "stdDev"
+          ],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
+        "orientation": "vertical",
+        "showValue": "auto",
+        "stacking": "none",
         "tooltip": {
           "mode": "single",
           "sort": "none"
-        }
+        },
+        "xField": "time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
       },
       "targets": [
         {
@@ -728,7 +777,24 @@
         }
       ],
       "title": "Monthly Average Departure Delay: AA vs DL",
-      "type": "timeseries"
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "time",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "formatTime",
+          "options": {
+            "outputFormat": "MMM",
+            "timeField": "time",
+            "useTimezone": true
+          }
+        }
+      ],
+      "type": "barchart"
     },
     {
       "datasource": {
@@ -861,6 +927,118 @@
         }
       ],
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-BlYlRd",
+            "seriesBy": "last"
+          },
+          "custom": {
+            "axisBorderShow": true,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "dep_delay",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 9,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "keyName": "q1:ts:dep_delay_mean:AA",
+          "legend": "AA",
+          "query": "",
+          "refId": "AA",
+          "type": "timeSeries"
+        },
+        {
+          "aggregation": "",
+          "command": "ts.range",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "hide": false,
+          "keyName": "q1:ts:dep_delay_mean:DL",
+          "legend": "DL",
+          "query": "",
+          "refId": "DL",
+          "type": "timeSeries"
+        }
+      ],
+      "title": "Monthly Average Departure Delay: AA vs DL",
+      "type": "timeseries"
     }
   ],
   "refresh": "",
@@ -877,6 +1055,6 @@
   "timezone": "browser",
   "title": "[Q1] Monthly Average Departure Delay and Cancellation Rate: AA vs DL",
   "uid": "bfncfslz0zksga",
-  "version": 4,
+  "version": 6,
   "weekStart": ""
 }
