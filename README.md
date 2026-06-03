@@ -190,7 +190,7 @@ NOTA: Il `benchmark_rdd_vs_df` misura le performance di DataFrame vs RDD su 20 i
 
 ```bash
 # Benchmark DataFrame per Q1, Q2, Q3 con warm-up
-./run.sh benchmark.py
+./run.sh benchmark_warmup.py
 
 # Benchmark DataFrame vs RDD per Q1, Q2, Q3 con warm-up
 ./run.sh benchmark_rdd_vs_df.py

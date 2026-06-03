@@ -20,10 +20,10 @@ Fasi misurate e riportate nel CSV di report:
   Q3: loading_s, filtering_s, computation_percentiles_s, computation_minmax_s, output_s, total_s, wall_total_s
 
 Utilizzo (dall'esterno del container):
-    ./run.sh benchmark.py
+    ./run.sh benchmark_warmup.py
 
 Oppure direttamente inside il container spark-master:
-    spark-submit --master spark://spark-master:7077 /opt/scripts/tools/benchmark.py
+    spark-submit --master spark://spark-master:7077 /opt/scripts/tools/benchmark_warmup.py
 
 Parametri configurabili (sezione CONFIG più in basso):
     TOTAL_ITERATIONS  – numero totale di esecuzioni per query  (default: 20)
