@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -15,9 +15,12 @@ from docx.shared import Cm, Pt
 
 AGGREGATE_CSV = Path("output/benchmarks/benchmark_scaling_summary.csv")
 RAW_CSV = Path("output/benchmarks/benchmark_raw_iterations_summary.csv")
-OUTPUT_DOCX = Path("plots/benchmark_tables/benchmark_tables.docx")
+
 COLDSTART_CSV = Path("output/benchmark_coldstart_report.csv")
 WARM_BENCHMARK_CSV = Path("output/benchmark_report.csv")
+
+OUTPUT_DOCX = Path("plots/benchmark_tables/benchmark_tables.docx")
+
 QUERIES = ["Q1", "Q2", "Q3"]
 IMPLS = ["df", "rdd"]
 
@@ -26,12 +29,33 @@ IMPL_LABELS = {
     "rdd": "RDD",
 }
 
-PHASE_LABELS = {
-    "loading_s": "Loading",
-    "filtering_s": "Filtering",
-    "processing_s": "Processing",
-    "output_s": "Output",
-    "end_to_end_s": "End-to-end",
+PHASE_ORDER = {
+    "spark_start_s": 0,
+    "loading_s": 1,
+    "filtering_s": 2,
+    "computation_s": 3,
+    "all_airlines_computation_s": 4,
+    "top10_computation_s": 5,
+    "computation_percentiles_s": 6,
+    "computation_minmax_s": 7,
+    "output_s": 8,
+    "total_s": 9,
+    "wall_total_s": 10,
+    "end_to_end_s": 11,
+    "spark_stop_s": 12,
+}
+
+DIRECT_COMPARISON_PHASES = [
+    ("spark_start_s", "Spark start"),
+    ("loading_s", "Loading"),
+    ("processing_s", "Processing"),
+    ("wall_total_s", "End-to-end"),
+    ("spark_stop_s", "Spark stop"),
+]
+
+DIRECT_COMPARISON_SOURCE_ORDER = {
+    "cold-start": 0,
+    "warm-session": 1,
 }
 
 
@@ -102,6 +126,41 @@ def normalize_raw_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def normalize_phase_report_df(df: pd.DataFrame, source_name: str) -> pd.DataFrame:
+    required = {
+        "query",
+        "phase",
+        "n",
+        "mean_s",
+        "std_s",
+        "median_s",
+        "min_s",
+        "max_s",
+    }
+
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing columns in {source_name}: {sorted(missing)}")
+
+    df = df.copy()
+
+    df["query"] = df["query"].astype(str).str.upper()
+    df["phase"] = df["phase"].astype(str)
+
+    for col in ["n", "mean_s", "std_s", "median_s", "min_s", "max_s"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df = df.dropna(subset=["query", "phase", "mean_s"])
+
+    df["phase_order"] = df["phase"].map(PHASE_ORDER).fillna(999).astype(int)
+    df["query_order"] = df["query"].str.extract(r"Q(\d+)")[0]
+    df["query_order"] = pd.to_numeric(df["query_order"], errors="coerce").fillna(999).astype(int)
+
+    df = df.sort_values(["query_order", "phase_order", "phase"]).reset_index(drop=True)
+
+    return df
+
+
 def format_mean_std(mean: Optional[float], std: Optional[float]) -> str:
     if mean is None or pd.isna(mean):
         return "—"
@@ -119,8 +178,7 @@ def format_value(value: Optional[float]) -> str:
 
 
 def get_worker_counts(df: pd.DataFrame) -> List[int]:
-    workers = sorted(int(w) for w in df["worker_count"].dropna().unique())
-    return workers
+    return sorted(int(w) for w in df["worker_count"].dropna().unique())
 
 
 def aggregate_raw_phase(raw: pd.DataFrame, phase: str) -> pd.DataFrame:
@@ -217,20 +275,6 @@ def get_processing_mean_from_granular_aggregate(
     query: str,
     impl: str,
 ) -> Optional[float]:
-    """
-    Normalized processing time for the phase breakdown table.
-
-    Q1:
-      computation_s
-
-    Q2:
-      - DataFrame: all_airlines_computation_s + top10_computation_s
-      - RDD: computation_s
-
-    Q3:
-      computation_percentiles_s
-    """
-
     if query == "Q1":
         return get_aggregate_mean(aggregate, worker, query, impl, "computation_s")
 
@@ -300,57 +344,6 @@ def build_phase_breakdown_table(
 
     return rows
 
-PHASE_ORDER = {
-    "spark_start_s": 0,
-    "loading_s": 1,
-    "filtering_s": 2,
-    "computation_s": 3,
-    "all_airlines_computation_s": 4,
-    "top10_computation_s": 5,
-    "computation_percentiles_s": 6,
-    "computation_minmax_s": 7,
-    "output_s": 8,
-    "total_s": 9,
-    "wall_total_s": 10,
-    "spark_stop_s": 11,
-    "end_to_end_s": 12,
-}
-
-
-def normalize_phase_report_df(df: pd.DataFrame, source_name: str) -> pd.DataFrame:
-    required = {
-        "query",
-        "phase",
-        "n",
-        "mean_s",
-        "std_s",
-        "median_s",
-        "min_s",
-        "max_s",
-    }
-
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Missing columns in {source_name}: {sorted(missing)}")
-
-    df = df.copy()
-
-    df["query"] = df["query"].astype(str).str.upper()
-    df["phase"] = df["phase"].astype(str)
-
-    for col in ["n", "mean_s", "std_s", "median_s", "min_s", "max_s"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    df = df.dropna(subset=["query", "phase", "mean_s"])
-
-    df["phase_order"] = df["phase"].map(PHASE_ORDER).fillna(999).astype(int)
-    df["query_order"] = df["query"].str.extract(r"Q(\d+)")[0]
-    df["query_order"] = pd.to_numeric(df["query_order"], errors="coerce").fillna(999).astype(int)
-
-    df = df.sort_values(["query_order", "phase_order", "phase"]).reset_index(drop=True)
-
-    return df
-
 
 def format_phase_name(phase: str) -> str:
     labels = {
@@ -365,8 +358,8 @@ def format_phase_name(phase: str) -> str:
         "output_s": "Output",
         "total_s": "Total",
         "wall_total_s": "Wall total",
-        "spark_stop_s": "Spark stop",
         "end_to_end_s": "End-to-end",
+        "spark_stop_s": "Spark stop",
     }
 
     return labels.get(phase, phase)
@@ -402,6 +395,206 @@ def build_phase_summary_rows(df: pd.DataFrame) -> List[List[str]]:
 
     return rows
 
+
+def get_phase_row(df: pd.DataFrame, query: str, phase: str) -> Optional[pd.Series]:
+    match = df[
+        (df["query"] == query)
+        & (df["phase"] == phase)
+    ]
+
+    if match.empty:
+        return None
+
+    return match.iloc[0]
+
+
+def sum_phase_rows(
+    first: pd.Series,
+    second: pd.Series,
+    query: str,
+    phase: str,
+) -> dict:
+    """
+    Sum two aggregate rows element by element.
+
+    This is intentionally element-wise because the source files only contain
+    aggregate statistics, not per-iteration raw timings.
+    """
+
+    n_first = first.get("n")
+    n_second = second.get("n")
+
+    if pd.isna(n_first):
+        n = n_second
+    elif pd.isna(n_second):
+        n = n_first
+    else:
+        n = min(int(n_first), int(n_second))
+
+    return {
+        "query": query,
+        "phase": phase,
+        "n": n,
+        "mean_s": first["mean_s"] + second["mean_s"],
+        "std_s": first["std_s"] + second["std_s"],
+        "median_s": first["median_s"] + second["median_s"],
+        "min_s": first["min_s"] + second["min_s"],
+        "max_s": first["max_s"] + second["max_s"],
+    }
+
+
+def get_normalized_report_phase_row(
+    df: pd.DataFrame,
+    query: str,
+    target_phase: str,
+) -> Optional[dict]:
+    """
+    Return one normalized row for the direct cold-start vs warm-session table.
+
+    Kept logical phases:
+    - spark_start_s
+    - loading_s
+    - processing_s
+    - wall_total_s
+    - spark_stop_s
+
+    Q2 processing is computed as:
+    all_airlines_computation_s + top10_computation_s
+    element by element.
+    """
+
+    if target_phase == "processing_s":
+        if query == "Q2":
+            all_airlines = get_phase_row(df, query, "all_airlines_computation_s")
+            top10 = get_phase_row(df, query, "top10_computation_s")
+
+            if all_airlines is not None and top10 is not None:
+                return sum_phase_rows(
+                    first=all_airlines,
+                    second=top10,
+                    query=query,
+                    phase="processing_s",
+                )
+
+            fallback = get_phase_row(df, query, "computation_s")
+            if fallback is None:
+                return None
+
+            return {
+                "query": query,
+                "phase": "processing_s",
+                "n": fallback["n"],
+                "mean_s": fallback["mean_s"],
+                "std_s": fallback["std_s"],
+                "median_s": fallback["median_s"],
+                "min_s": fallback["min_s"],
+                "max_s": fallback["max_s"],
+            }
+
+        if query == "Q3":
+            row = get_phase_row(df, query, "computation_s")
+
+            if row is None:
+                row = get_phase_row(df, query, "computation_percentiles_s")
+
+            if row is None:
+                return None
+
+            return {
+                "query": query,
+                "phase": "processing_s",
+                "n": row["n"],
+                "mean_s": row["mean_s"],
+                "std_s": row["std_s"],
+                "median_s": row["median_s"],
+                "min_s": row["min_s"],
+                "max_s": row["max_s"],
+            }
+
+        row = get_phase_row(df, query, "computation_s")
+
+        if row is None:
+            return None
+
+        return {
+            "query": query,
+            "phase": "processing_s",
+            "n": row["n"],
+            "mean_s": row["mean_s"],
+            "std_s": row["std_s"],
+            "median_s": row["median_s"],
+            "min_s": row["min_s"],
+            "max_s": row["max_s"],
+        }
+
+    row = get_phase_row(df, query, target_phase)
+
+    if row is None:
+        return None
+
+    return {
+        "query": query,
+        "phase": target_phase,
+        "n": row["n"],
+        "mean_s": row["mean_s"],
+        "std_s": row["std_s"],
+        "median_s": row["median_s"],
+        "min_s": row["min_s"],
+        "max_s": row["max_s"],
+    }
+
+def build_cold_vs_warm_rows(
+    coldstart: pd.DataFrame,
+    warm: pd.DataFrame,
+) -> Tuple[List[List[str]], List[Tuple[str, str]]]:
+    """
+    Build a direct comparison table between cold-start and warm-session reports.
+
+    Visible columns:
+    query, phase, mode, mean_s, std_s, median_s, min_s, max_s
+    """
+
+    rows: List[List[str]] = [
+        ["Query", "Phase", "Mode", "Mean (s)", "StdDev", "Median", "Min", "Max"]
+    ]
+
+    group_keys: List[Tuple[str, str]] = [("__header__", "__header__")]
+
+    sources = [
+        ("cold start", coldstart),
+        ("warmup", warm),
+    ]
+
+    for query in QUERIES:
+        for target_phase, phase_label in DIRECT_COMPARISON_PHASES:
+            for mode_label, source_df in sources:
+                normalized = get_normalized_report_phase_row(
+                    df=source_df,
+                    query=query,
+                    target_phase=target_phase,
+                )
+
+                if normalized is None:
+                    continue
+
+                rows.append(
+                    [
+                        query,
+                        phase_label,
+                        mode_label,
+                        format_value(normalized["mean_s"]),
+                        format_value(normalized["std_s"]),
+                        format_value(normalized["median_s"]),
+                        format_value(normalized["min_s"]),
+                        format_value(normalized["max_s"]),
+                    ]
+                )
+
+                group_keys.append((query, phase_label))
+
+    return rows, group_keys
+
+
 def set_cell_shading(cell, fill: str) -> None:
     tc_pr = cell._tc.get_or_add_tcPr()
     shd = tc_pr.find(qn("w:shd"))
@@ -414,13 +607,6 @@ def set_cell_shading(cell, fill: str) -> None:
 
 
 def set_cell_borders(cell, top=None, bottom=None, left=None, right=None) -> None:
-    """
-    Set borders for a table cell.
-
-    Each border value can be a dict like:
-    {"val": "single", "sz": "8", "color": "000000"}
-    """
-
     tc = cell._tc
     tc_pr = tc.get_or_add_tcPr()
     tc_borders = tc_pr.first_child_found_in("w:tcBorders")
@@ -461,15 +647,6 @@ def clear_cell_borders(cell) -> None:
 
 
 def set_table_academic_borders(table) -> None:
-    """
-    Academic style:
-    - no vertical borders;
-    - strong top border;
-    - strong header separator;
-    - strong bottom border;
-    - light internal horizontal borders.
-    """
-
     strong = {"val": "single", "sz": "12", "color": "000000"}
     light = {"val": "single", "sz": "4", "color": "BFBFBF"}
     none = {"val": "nil", "sz": "0", "color": "FFFFFF"}
@@ -499,12 +676,8 @@ def set_table_academic_borders(table) -> None:
                 right=none,
             )
 
-def set_table_academic_borders_with_groups(table, rows: List[List[str]]) -> None:
-    """
-    Academic style with stronger horizontal separators when the value
-    in the first column changes, e.g. from Q1 to Q2.
-    """
 
+def set_table_academic_borders_with_groups(table, rows: List[List[str]]) -> None:
     strong = {"val": "single", "sz": "12", "color": "000000"}
     medium = {"val": "single", "sz": "10", "color": "000000"}
     light = {"val": "single", "sz": "4", "color": "BFBFBF"}
@@ -529,6 +702,53 @@ def set_table_academic_borders_with_groups(table, rows: List[List[str]]) -> None
                 previous_group = rows[r_idx - 1][0]
 
                 if current_group != previous_group:
+                    top = medium
+
+            set_cell_borders(
+                cell,
+                top=top,
+                bottom=bottom,
+                left=none,
+                right=none,
+            )
+
+
+def set_table_borders_by_query_and_phase(
+    table,
+    group_keys: List[Tuple[str, str]],
+) -> None:
+    """
+    Stronger border between queries.
+    Medium border between phases inside the same query.
+    No special border between cold-start and warm-session rows of the same phase.
+    """
+
+    strong = {"val": "single", "sz": "14", "color": "000000"}
+    medium = {"val": "single", "sz": "10", "color": "000000"}
+    light = {"val": "single", "sz": "4", "color": "BFBFBF"}
+    none = {"val": "nil", "sz": "0", "color": "FFFFFF"}
+
+    row_count = len(table.rows)
+
+    for r_idx, row in enumerate(table.rows):
+        for cell in row.cells:
+            clear_cell_borders(cell)
+
+            top = None
+            bottom = light
+
+            if r_idx == 0:
+                top = strong
+                bottom = strong
+            elif r_idx == row_count - 1:
+                bottom = strong
+            else:
+                current_query, current_phase = group_keys[r_idx]
+                previous_query, previous_phase = group_keys[r_idx - 1]
+
+                if current_query != previous_query:
+                    top = strong
+                elif current_phase != previous_phase:
                     top = medium
 
             set_cell_borders(
@@ -571,11 +791,13 @@ def add_note(document: Document, text: str) -> None:
     run.font.name = "Times New Roman"
     run.font.size = Pt(9)
 
+
 def add_academic_table(
     document: Document,
     caption: str,
     rows: List[List[str]],
     group_by_first_column: bool = False,
+    group_keys: Optional[List[Tuple[str, str]]] = None,
 ) -> None:
     add_caption(document, caption)
 
@@ -596,12 +818,15 @@ def add_academic_table(
             if is_header:
                 set_cell_shading(cell, "F2F2F2")
 
-    if group_by_first_column:
+    if group_keys is not None:
+        set_table_borders_by_query_and_phase(table, group_keys)
+    elif group_by_first_column:
         set_table_academic_borders_with_groups(table, rows)
     else:
         set_table_academic_borders(table)
 
     document.add_paragraph()
+
 
 def configure_document(document: Document) -> None:
     section = document.sections[0]
@@ -665,6 +890,11 @@ def main() -> None:
 
     coldstart_rows = build_phase_summary_rows(coldstart)
     warm_benchmark_rows = build_phase_summary_rows(warm_benchmark)
+
+    cold_vs_warm_rows, cold_vs_warm_group_keys = build_cold_vs_warm_rows(
+        coldstart=coldstart,
+        warm=warm_benchmark,
+    )
 
     document = Document()
     configure_document(document)
@@ -746,6 +976,22 @@ def main() -> None:
         document,
         "Values are mean execution times in seconds. The warm-session benchmark reuses "
         "the same Spark session across iterations and reports the measured phases for each query.",
+    )
+
+    document.add_paragraph()
+
+    add_academic_table(
+        document,
+        "Table 6: Cold-start vs warm-session benchmark phase comparison",
+        cold_vs_warm_rows,
+        group_keys=cold_vs_warm_group_keys,
+    )
+
+    add_note(
+        document,
+        "Only selected phases are reported: Spark start, loading, processing, end-to-end and Spark stop. "
+        "For Q2, processing is computed as all_airlines_computation_s + top10_computation_s, summed element by element "
+        "from the aggregate rows. The mode column distinguishes cold start from warmup execution.",
     )
 
     OUTPUT_DOCX.parent.mkdir(parents=True, exist_ok=True)
