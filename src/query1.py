@@ -81,7 +81,6 @@ def run_query1(spark, save_output=True, print_preview=True):
             "ARR_DELAY",
             "CANCELLED",
         )
-        .cache()
     )
 
     # Azione che forza l'esecuzione per calcolo dei tempi
@@ -100,12 +99,10 @@ def run_query1(spark, save_output=True, print_preview=True):
 
     df_filtered = (
         df.filter(F.col("OP_UNIQUE_CARRIER").isin(TARGET_AIRLINES))
-        .cache()
     )
 
     # Azioni che forzano l'esecuzione del filtering/preprocessing
     df_filtered.count()
-    df.unpersist()
 
     timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.2f}s")
@@ -162,12 +159,11 @@ def run_query1(spark, save_output=True, print_preview=True):
             F.round("cancellation_rate", 4).alias("cancellation_rate"),
         )
         .orderBy("airline", "month")
-        .cache()
+        .cache() # lo mettiamo in cache per l'output
     )
 
-    # Materializza per misurare il tempo di computazione + libera cache non più utile
+    # Materializza per misurare il tempo di computazione
     result_count = result.count()
-    df_filtered.unpersist()
 
     timings["computation_s"] = round(time.time() - t2, 3)
     print(f"    Aggregazione completata in {timings['computation_s']:.2f}s")
@@ -204,7 +200,7 @@ def run_query1(spark, save_output=True, print_preview=True):
 
 def main():
     print("=" * 72)
-    print("  SABD Project 1 - Query 1: Monthly Delay and Cancellation Stats")
+    print("  Query 1: Monthly Delay and Cancellation Stats")
     print("=" * 72)
 
     total_start = time.time()

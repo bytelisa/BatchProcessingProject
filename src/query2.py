@@ -165,12 +165,10 @@ def run_query2(spark, save_output=True, print_preview=True):
         df
         .filter((F.col("CANCELLED") == 0) & (F.col("DIVERTED") == 0))
         .filter(F.col("ARR_DELAY").isNotNull())
-        .cache()
     )
 
     # Azione che forza l'esecuzione
     df_filtered.count()
-    df.unpersist()
 
     timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.3f}s")
@@ -185,7 +183,7 @@ def run_query2(spark, save_output=True, print_preview=True):
 
     all_airlines_stats = build_all_airlines_stats(df_filtered)
 
-    # Cache utile perché questo dataframe viene:
+    # Cache qui utile perché questo dataframe viene:
     # - contato
     # - mostrato
     # - usato per costruire la top 10
@@ -194,7 +192,6 @@ def run_query2(spark, save_output=True, print_preview=True):
 
     # Azione che forza l'esecuzione
     all_count = all_airlines_stats.count()
-    df_filtered.unpersist()
 
     timings["all_airlines_computation_s"] = round(time.time() - t2, 3)
 
@@ -209,7 +206,7 @@ def run_query2(spark, save_output=True, print_preview=True):
 
     t3 = time.time()
 
-    # Caching perché poi il risultato è riutilizzato
+    # Caching perché poi il risultato è riutilizzato nella fase di output
     top10_arrival_delay = build_top10_arrival_delay(all_airlines_stats).cache()
 
     # Materializzo per misurare il tempo di calcolo della top 10

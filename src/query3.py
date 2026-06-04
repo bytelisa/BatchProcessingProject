@@ -94,7 +94,6 @@ def run_query3(spark, save_output=True, print_preview=True):
         "DEP_DELAY",
         "CANCELLED",
         )
-        .cache()
     )
 
     # Azione che forza l'esecuzione (per calcolo tempi)
@@ -126,9 +125,6 @@ def run_query3(spark, save_output=True, print_preview=True):
 
     # Azione che forza l'esecuzione per il calcolo dei tempi
     df_filtered.count()
-
-    # Liberiamo la cache dal dataframe ormai inutile
-    df.unpersist()
 
     timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.2f}s")
