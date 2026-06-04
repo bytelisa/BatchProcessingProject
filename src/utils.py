@@ -88,12 +88,6 @@ def load_flights(spark):
 
     return df
 
-def add_hour_column(df):
-    """
-    Ricava l'ora del giorno dal campo CRS_DEP_TIME (formato HHMM intero).
-    Es: 830 → 8, 1245 → 12, 0 → 0
-    """
-    return df.withColumn("HOUR", (F.col("CRS_DEP_TIME") / 100).cast(IntegerType()))
 
 # ─────────────────────────────────────────────
 # Salvataggio risultati

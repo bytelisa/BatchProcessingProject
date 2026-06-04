@@ -9,7 +9,7 @@ configurabile di iterazioni, escludendo le prime N di warm-up.
 Usa la sessione condivisa — una sola SparkSession per tutte le iterazioni e tutte le combinazioni.
 
 Scelte metodologiche:
-  - La scrittura CSV avviene a OGNI iterazione valida (non solo l'ultima):
+  - La scrittura CSV avviene a OGNI iterazione valida:
     questo permette di calcolare media e std su end_to_end_s (loading +
     computation + output) con la stessa solidità statistica delle altre fasi.
 

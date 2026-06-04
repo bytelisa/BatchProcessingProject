@@ -73,12 +73,12 @@ services:
       - sabd-net
 
   nifi:
-    image: apache/nifi:1.23.2    # ← compatibile con HDFS, prima era 2.4.0
+    image: apache/nifi:1.23.2
     hostname: nifi
     ports:
-      - "9090:9090"             # ← in 1.x è HTTP non HTTPS
+      - "9090:9090"
     environment:
-      - NIFI_WEB_HTTP_PORT=9090  # ← cambia da HTTPS a HTTP
+      - NIFI_WEB_HTTP_PORT=9090
     volumes:
       - nifi_data:/opt/nifi/nifi-current/data
       - nifi_conf:/opt/nifi/nifi-current/conf

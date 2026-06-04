@@ -1,12 +1,12 @@
 """
 Benchmark Cold Start delle Query Spark
 
-Variante del benchmark principale in cui la SparkSession viene
+Variante del benchmark warm-up in cui la SparkSession viene
 fermata e ricreata a ogni iterazione, simulando il cold start
 (JVM spenta, nessuna cache di OS/JVM, piano di esecuzione da ricompilare).
 
 Confronto con benchmark_warmup.py (warm session):
-  - benchmark_warmup.py          → sessione unica condivisa: misura throughput
+  - benchmark_warmup.py    → sessione unica condivisa: misura throughput
                             in condizioni operative (JVM calda, page cache attiva)
   - benchmark_coldstart.py → sessione riavviata ogni volta: misura latenza
                             percepita al primo avvio della query (cold start)

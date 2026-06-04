@@ -497,7 +497,7 @@ with DAG(
     #  t_check_parquet
     #       │
     #  ┌────┼────┐
-    #  Q1   Q2   Q3   (parallele)
+    #  Q1   Q2   Q3
     #  └────┼────┘
     #       │
     #   t_check_query_outputs
