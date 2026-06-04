@@ -163,6 +163,8 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
         .cache()
     )
 
+    rdd_base.count()
+
     timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
@@ -199,6 +201,9 @@ def run_query3_rdd(spark, save_output=True, print_preview=True):
         rows_percentiles.append((airline, hour, n, p25, p50, p75, p90))
 
     rows_percentiles.sort(key=lambda r: (r[0], r[1]))
+
+    # Azione che forza l'esecuzione
+    rows_percentiles.count()
 
     timings["computation_percentiles_s"] = round(time.time() - t1, 3)
     print(f"    Calcolo percentili completato in {timings['computation_percentiles_s']:.2f}s")

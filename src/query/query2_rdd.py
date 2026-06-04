@@ -228,6 +228,8 @@ def run_query2_rdd(spark, save_output=True, print_preview=True):
         ))
     )
 
+    rdd_base.count()
+
     timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
@@ -244,6 +246,8 @@ def run_query2_rdd(spark, save_output=True, print_preview=True):
         .filter(lambda r: r[1] == 0 and r[2] == 0)
         .cache()
     )
+
+    valid_flights.count()
 
     timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.2f}s")
