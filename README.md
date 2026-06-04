@@ -221,42 +221,56 @@ python tools/plot_benchmark_scaling.py
 BatchProcessingProject/
 ├── airflow/
 │   ├── dags/
-│   │   └── sabd_pipeline.py        # DAG Airflow principale
-│   ├── logs/                       # Log delle esecuzioni
-│   └── start.sh                    # Script di avvio Airflow
+│   │   └── sabd_pipeline.py              # DAG Airflow principale
+│   ├── logs/                             # Log delle esecuzioni
+│   └── start.sh                          # Script di avvio Airflow
 ├── grafana/
-│   ├── dashboards/                 # JSON dei dashboard (Q1, Q2, Q3, benchmark)
-│   └── provisioning/               # Configurazione automatica datasource Redis
+│   ├── dashboards/                       # JSON dei dashboard (Q1, Q2, Q3, benchmark)
+│   └── provisioning/                     # Configurazione automatica datasource Redis
 ├── nifi/
-│   ├── flows/                      # Flow NiFi esportati
-│   └── hadoop-conf/                # core-site.xml, hdfs-site.xml per NiFi
+│   ├── flows/                            # Flow NiFi esportati
+│   └── hadoop-conf/                      # core-site.xml, hdfs-site.xml per NiFi
+├── output/
+│   ├── benchmarks/                       # Risultati benchmark in CSV
+│   └── query/                            # Risultati delle query in CSV
+├── plots/
+│   ├── benchmark_plots/                  # Boxplot comparativi DF vs RDD
+│   ├── benchmark_tables/                 # Tabelle riassuntive benchmark
+│   └── scaling_plots/                    # Grafici di scaling per numero di worker
 ├── src/
-│   ├── config.py                   # Path HDFS e output centralizzati
-│   ├── preprocess.py               # Preprocessing CSV → Parquet
-│   ├── query1.py / query1_rdd.py   # Q1: statistiche mensili per airline
-│   ├── query2.py / query2_rdd.py   # Q2: top-10 airline per ritardo
-│   ├── query3.py / query3_rdd.py   # Q3: percentili ritardo per airline e ora
-│   ├── utils.py                    # Utilità condivise
-│   ├── benchmark.py                # Framework di benchmarking base
-│   ├── benchmark_rdd_vs_df.py      # Benchmark DataFrame vs RDD
-│   ├── benchmark_q3.py             # Benchmark Q3 (percentile_approx vs t-digest)
-│   ├── benchmark_coldstart.py      # Benchmark con cold start
-│   ├── benchmark_config.py/.json   # Parametri del benchmark
-│   ├── export_output_to_redis.py   # Esportazione risultati query → Redis
-│   └── export_benchmark_to_redis.py# Esportazione risultati benchmark → Redis
+│   ├── benchmark/
+│   │   ├── benchmark_coldstart.py        # Benchmark con cold start
+│   │   ├── benchmark_config.json         # Parametri del benchmark (JSON)
+│   │   ├── benchmark_config.py           # Parametri del benchmark (Python)
+│   │   ├── benchmark_q3.py               # Benchmark Q3 (percentile_approx vs t-digest)
+│   │   ├── benchmark_rdd_vs_df.py        # Benchmark DataFrame vs RDD
+│   │   └── benchmark_warmup.py           # Benchmark con warm-up
+│   ├── export/
+│   │   ├── export_benchmark_to_redis.py  # Esportazione risultati benchmark → Redis
+│   │   └── export_output_to_redis.py     # Esportazione risultati query → Redis
+│   ├── query/
+│   │   ├── query1.py                     # Q1: statistiche mensili (DataFrame)
+│   │   ├── query1_rdd.py                 # Q1: statistiche mensili (RDD)
+│   │   ├── query2.py                     # Q2: top-10 airline per ritardo (DataFrame)
+│   │   ├── query2_rdd.py                 # Q2: top-10 airline per ritardo (RDD)
+│   │   ├── query3.py                     # Q3: percentili orari (DataFrame)
+│   │   └── query3_rdd.py                 # Q3: percentili orari (RDD, t-digest)
+│   ├── config.py                         # Path HDFS e output centralizzati
+│   ├── preprocess.py                     # Preprocessing CSV → Parquet
+│   └── utils.py                          # Utilità condivise (SparkSession, costanti)
 ├── tools/
-│   ├── plot_benchmark_boxplots.py  # Boxplot comparativi DF vs RDD
-│   ├── plot_benchmark_scaling.py   # Grafici di scaling per numero di worker
-│   └── run_worker_benchmarks.py    # Esecuzione benchmark al variare dei worker
+│   ├── plot_benchmark_boxplots.py        # Boxplot comparativi DF vs RDD
+│   ├── plot_benchmark_scaling.py         # Grafici di scaling per numero di worker
+│   └── run_worker_benchmarks.py          # Esecuzione benchmark al variare dei worker
 ├── utility/
-│   ├── dataset_quality_check.py    # Analisi qualità dataset BTS
+│   ├── dataset_quality_check.py          # Analisi qualità dataset BTS
 │   ├── check_missing_delay_causes.py
 │   ├── check_wn_night_flights.py
-│   └── compare_query_ouputs.py     # Confronto output DF vs RDD
+│   └── compare_query_outputs.py          # Confronto output DF vs RDD
 ├── docker-compose.yml
-├── Dockerfile                      # Immagine Spark custom (+ tdigest, pandas, redis)
-├── hadoop.env                      # Variabili d'ambiente Hadoop
-├── run.sh                          # Shortcut spark-submit
+├── Dockerfile                            # Immagine Spark custom (+ tdigest, pandas, redis)
+├── hadoop.env                            # Variabili d'ambiente Hadoop
+├── run.sh                                # Shortcut spark-submit
 └── README.md
 ```
 
