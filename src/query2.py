@@ -147,7 +147,6 @@ def run_query2(spark, save_output=True, print_preview=True):
             "DIVERTED",
             *DELAY_CAUSE_COLUMNS,
         )
-        .cache()
     )
 
     # Azione che forza l'esecuzione
