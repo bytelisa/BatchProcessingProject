@@ -71,15 +71,21 @@ def run_query1(spark, save_output=True, print_preview=True):
 
     t0 = time.time()
 
-    df = spark.read.parquet(PARQUET_PATH)
-
-    df = df.select(
-        "MONTH",
-        "OP_UNIQUE_CARRIER",
-        "DEP_DELAY",
-        "ARR_DELAY",
-        "CANCELLED",
+    # Select in fase di loading per forzare Spark a leggere effettivamente le colonne necessarie
+    df = (
+        spark.read.parquet(PARQUET_PATH)
+        .select(
+            "MONTH",
+            "OP_UNIQUE_CARRIER",
+            "DEP_DELAY",
+            "ARR_DELAY",
+            "CANCELLED",
+        )
+        .cache()
     )
+
+    # Azione che forza l'esecuzione per calcolo dei tempi
+    df.count()
 
     timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
@@ -92,9 +98,14 @@ def run_query1(spark, save_output=True, print_preview=True):
 
     t1 = time.time()
 
-    df_filtered = df.filter(
-        F.col("OP_UNIQUE_CARRIER").isin(TARGET_AIRLINES)
+    df_filtered = (
+        df.filter(F.col("OP_UNIQUE_CARRIER").isin(TARGET_AIRLINES))
+        .cache()
     )
+
+    # Azioni che forzano l'esecuzione del filtering/preprocessing
+    df_filtered.count()
+    df.unpersist()
 
     timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.2f}s")
@@ -151,10 +162,12 @@ def run_query1(spark, save_output=True, print_preview=True):
             F.round("cancellation_rate", 4).alias("cancellation_rate"),
         )
         .orderBy("airline", "month")
+        .cache()
     )
 
-    # Materializza per misurare il tempo di computazione
+    # Materializza per misurare il tempo di computazione + libera cache non più utile
     result_count = result.count()
+    df_filtered.unpersist()
 
     timings["computation_s"] = round(time.time() - t2, 3)
     print(f"    Aggregazione completata in {timings['computation_s']:.2f}s")
