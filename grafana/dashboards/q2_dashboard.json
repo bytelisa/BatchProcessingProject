@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
   "links": [],
   "panels": [
     {
@@ -29,21 +28,21 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "green",
-            "mode": "thresholds"
+            "fixedColor": "blue",
+            "mode": "shades"
           },
           "custom": {
             "axisBorderShow": true,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisGridShow": true,
-            "axisLabel": "arrival delay (min)",
+            "axisLabel": "Mean Arrival Delay",
             "axisPlacement": "auto",
             "axisSoftMax": 19,
             "axisSoftMin": 0,
             "axisWidth": 30,
             "fillOpacity": 100,
-            "gradientMode": "scheme",
+            "gradientMode": "hue",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
@@ -63,7 +62,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "value": null
               },
               {
@@ -72,10 +71,10 @@
               },
               {
                 "color": "orange",
-                "value": 7
+                "value": 10
               },
               {
-                "color": "red",
+                "color": "dark-red",
                 "value": 15
               }
             ]
@@ -90,7 +89,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 7,
+      "id": 3,
       "options": {
         "barRadius": 0.4,
         "barWidth": 0.35,
@@ -171,7 +170,250 @@
             },
             "includeByName": {},
             "indexByName": {},
-            "renameByName": {}
+            "renameByName": {
+              "arrdelay_mean": "mean arr. delay"
+            }
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "delay minutes",
+            "axisPlacement": "auto",
+            "fillOpacity": 73,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Carrier delay"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#4cb0ff",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Late aircraft"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#7dce74",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Security"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Weather"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#d4858e",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "NAS"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#e4d277",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.75,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "normal",
+        "text": {
+          "valueSize": 12
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xField": "carrier",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "command": "",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "query": "EVAL \"local out={}; for i=1,10 do local carrier=redis.call('HGET','q2:metric:carrier',i); if carrier then local row={rank=i,carrier=carrier,carrier_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:carrier_delay_mean',i) or '0'),weather_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:weather_delay_mean',i) or '0'),nas_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:nas_delay_mean',i) or '0'),security_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:security_delay_mean',i) or '0'),late_aircraft_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:late_aircraft_delay_mean',i) or '0')}; table.insert(out,cjson.encode(row)); end; end; return out\" 0",
+          "refId": "A",
+          "type": "cli"
+        }
+      ],
+      "title": "Delay Cause Contributions by Airline Company",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": true,
+            "source": "Value"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "number",
+                "targetField": "rank"
+              },
+              {
+                "destinationType": "string",
+                "targetField": "carrier"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "late_aircraft_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "carrier_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "weather_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "security_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "nas_delay_mean"
+              }
+            ],
+            "fields": {}
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "rank": true
+            },
+            "includeByName": {},
+            "indexByName": {
+              "carrier": 3,
+              "carrier_delay_mean": 0,
+              "late_aircraft_delay_mean": 1,
+              "nas_delay_mean": 2,
+              "rank": 6,
+              "security_delay_mean": 5,
+              "weather_delay_mean": 4
+            },
+            "renameByName": {
+              "carrier": "",
+              "carrier_delay_mean": "Carrier delay",
+              "late_aircraft_delay_mean": "Late aircraft",
+              "nas_delay_mean": "NAS",
+              "security_delay_mean": "Security",
+              "weather_delay_mean": "Weather"
+            }
           }
         }
       ],
@@ -305,8 +547,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 0
+        "x": 0,
+        "y": 8
       },
       "id": 5,
       "options": {
@@ -333,6 +575,247 @@
         "xField": "carrier",
         "xTickLabelRotation": 0,
         "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "command": "",
+          "datasource": {
+            "type": "redis-datasource",
+            "uid": "redis_ds"
+          },
+          "query": "EVAL \"local out={}; for i=1,10 do local carrier=redis.call('HGET','q2:metric:carrier',i); if carrier then local row={rank=i,carrier=carrier,carrier_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:carrier_delay_mean',i) or '0'),weather_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:weather_delay_mean',i) or '0'),nas_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:nas_delay_mean',i) or '0'),security_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:security_delay_mean',i) or '0'),late_aircraft_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:late_aircraft_delay_mean',i) or '0')}; table.insert(out,cjson.encode(row)); end; end; return out\" 0",
+          "refId": "A",
+          "type": "cli"
+        }
+      ],
+      "title": "Delay Cause Contributions by Airline Company",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": true,
+            "source": "Value"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "number",
+                "targetField": "rank"
+              },
+              {
+                "destinationType": "string",
+                "targetField": "carrier"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "late_aircraft_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "carrier_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "weather_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "security_delay_mean"
+              },
+              {
+                "destinationType": "number",
+                "targetField": "nas_delay_mean"
+              }
+            ],
+            "fields": {}
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "rank": true
+            },
+            "includeByName": {},
+            "indexByName": {
+              "carrier": 3,
+              "carrier_delay_mean": 0,
+              "late_aircraft_delay_mean": 1,
+              "nas_delay_mean": 2,
+              "rank": 6,
+              "security_delay_mean": 5,
+              "weather_delay_mean": 4
+            },
+            "renameByName": {
+              "carrier": "",
+              "carrier_delay_mean": "Carrier delay",
+              "late_aircraft_delay_mean": "Late aircraft",
+              "nas_delay_mean": "NAS",
+              "security_delay_mean": "Security",
+              "weather_delay_mean": "Weather"
+            }
+          }
+        }
+      ],
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "redis-datasource",
+        "uid": "redis_ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "delay minutes",
+            "axisPlacement": "auto",
+            "fillOpacity": 73,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "m"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Carrier delay"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#4cb0ff",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Late aircraft"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#7dce74",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Security"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Weather"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#d4858e",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "NAS"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#e4d277",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.59,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "vertical",
+        "showValue": "never",
+        "stacking": "percent",
+        "text": {
+          "valueSize": 12
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xField": "carrier",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
       },
       "pluginVersion": "10.4.0",
       "targets": [
@@ -489,7 +972,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 16
       },
       "id": 8,
       "options": {
@@ -586,249 +1069,8 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "fixed"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "delay minutes",
-            "axisPlacement": "auto",
-            "fillOpacity": 73,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "m"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Carrier delay"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#4cb0ff",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Late aircraft"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#7dce74",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Security"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-purple",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Weather"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#d4858e",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "NAS"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#e4d277",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "id": 4,
-      "options": {
-        "barRadius": 0,
-        "barWidth": 0.75,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "orientation": "horizontal",
-        "showValue": "auto",
-        "stacking": "normal",
-        "text": {
-          "valueSize": 12
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "xField": "carrier",
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 100
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "command": "",
-          "datasource": {
-            "type": "redis-datasource",
-            "uid": "redis_ds"
-          },
-          "query": "EVAL \"local out={}; for i=1,10 do local carrier=redis.call('HGET','q2:metric:carrier',i); if carrier then local row={rank=i,carrier=carrier,carrier_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:carrier_delay_mean',i) or '0'),weather_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:weather_delay_mean',i) or '0'),nas_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:nas_delay_mean',i) or '0'),security_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:security_delay_mean',i) or '0'),late_aircraft_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:late_aircraft_delay_mean',i) or '0')}; table.insert(out,cjson.encode(row)); end; end; return out\" 0",
-          "refId": "A",
-          "type": "cli"
-        }
-      ],
-      "title": "Delay Cause Contributions by Airline Company",
-      "transformations": [
-        {
-          "id": "extractFields",
-          "options": {
-            "format": "json",
-            "replace": true,
-            "source": "Value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "number",
-                "targetField": "rank"
-              },
-              {
-                "destinationType": "string",
-                "targetField": "carrier"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "late_aircraft_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "carrier_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "weather_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "security_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "nas_delay_mean"
-              }
-            ],
-            "fields": {}
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "rank": true
-            },
-            "includeByName": {},
-            "indexByName": {
-              "carrier": 3,
-              "carrier_delay_mean": 0,
-              "late_aircraft_delay_mean": 1,
-              "nas_delay_mean": 2,
-              "rank": 6,
-              "security_delay_mean": 5,
-              "weather_delay_mean": 4
-            },
-            "renameByName": {
-              "carrier": "",
-              "carrier_delay_mean": "Carrier delay",
-              "late_aircraft_delay_mean": "Late aircraft",
-              "nas_delay_mean": "NAS",
-              "security_delay_mean": "Security",
-              "weather_delay_mean": "Weather"
-            }
-          }
-        }
-      ],
-      "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "redis-datasource",
-        "uid": "redis_ds"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "#ab002f",
-            "mode": "shades"
+            "fixedColor": "green",
+            "mode": "thresholds"
           },
           "custom": {
             "axisBorderShow": true,
@@ -841,7 +1083,7 @@
             "axisSoftMin": 0,
             "axisWidth": 30,
             "fillOpacity": 100,
-            "gradientMode": "hue",
+            "gradientMode": "scheme",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
@@ -861,7 +1103,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "green",
                 "value": null
               },
               {
@@ -870,10 +1112,10 @@
               },
               {
                 "color": "orange",
-                "value": 10
+                "value": 7
               },
               {
-                "color": "dark-red",
+                "color": "red",
                 "value": 15
               }
             ]
@@ -886,9 +1128,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 24
       },
-      "id": 3,
+      "id": 7,
       "options": {
         "barRadius": 0.4,
         "barWidth": 0.35,
@@ -974,247 +1216,6 @@
         }
       ],
       "type": "barchart"
-    },
-    {
-      "datasource": {
-        "type": "redis-datasource",
-        "uid": "redis_ds"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "delay minutes",
-            "axisPlacement": "auto",
-            "fillOpacity": 73,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineWidth": 1,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "m"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Carrier delay"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#4cb0ff",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Late aircraft"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#7dce74",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Security"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "dark-purple",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Weather"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#d4858e",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "NAS"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "#e4d277",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 16
-      },
-      "id": 6,
-      "options": {
-        "barRadius": 0,
-        "barWidth": 0.59,
-        "fullHighlight": false,
-        "groupWidth": 0.7,
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "orientation": "vertical",
-        "showValue": "never",
-        "stacking": "percent",
-        "text": {
-          "valueSize": 12
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        },
-        "xField": "carrier",
-        "xTickLabelRotation": 0,
-        "xTickLabelSpacing": 100
-      },
-      "pluginVersion": "10.4.0",
-      "targets": [
-        {
-          "command": "",
-          "datasource": {
-            "type": "redis-datasource",
-            "uid": "redis_ds"
-          },
-          "query": "EVAL \"local out={}; for i=1,10 do local carrier=redis.call('HGET','q2:metric:carrier',i); if carrier then local row={rank=i,carrier=carrier,carrier_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:carrier_delay_mean',i) or '0'),weather_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:weather_delay_mean',i) or '0'),nas_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:nas_delay_mean',i) or '0'),security_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:security_delay_mean',i) or '0'),late_aircraft_delay_mean=tonumber(redis.call('HGET','q2:metric:cause_abs:late_aircraft_delay_mean',i) or '0')}; table.insert(out,cjson.encode(row)); end; end; return out\" 0",
-          "refId": "A",
-          "type": "cli"
-        }
-      ],
-      "title": "Delay Cause Contributions by Airline Company",
-      "transformations": [
-        {
-          "id": "extractFields",
-          "options": {
-            "format": "json",
-            "replace": true,
-            "source": "Value"
-          }
-        },
-        {
-          "id": "convertFieldType",
-          "options": {
-            "conversions": [
-              {
-                "destinationType": "number",
-                "targetField": "rank"
-              },
-              {
-                "destinationType": "string",
-                "targetField": "carrier"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "late_aircraft_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "carrier_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "weather_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "security_delay_mean"
-              },
-              {
-                "destinationType": "number",
-                "targetField": "nas_delay_mean"
-              }
-            ],
-            "fields": {}
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "rank": true
-            },
-            "includeByName": {},
-            "indexByName": {
-              "carrier": 3,
-              "carrier_delay_mean": 0,
-              "late_aircraft_delay_mean": 1,
-              "nas_delay_mean": 2,
-              "rank": 6,
-              "security_delay_mean": 5,
-              "weather_delay_mean": 4
-            },
-            "renameByName": {
-              "carrier": "",
-              "carrier_delay_mean": "Carrier delay",
-              "late_aircraft_delay_mean": "Late aircraft",
-              "nas_delay_mean": "NAS",
-              "security_delay_mean": "Security",
-              "weather_delay_mean": "Weather"
-            }
-          }
-        }
-      ],
-      "type": "barchart"
     }
   ],
   "schemaVersion": 39,
@@ -1230,6 +1231,6 @@
   "timezone": "browser",
   "title": "[Q2] Top 10 by average arrival delay and cause contributions",
   "uid": "cfngowm85ff9ca",
-  "version": 13,
+  "version": 14,
   "weekStart": ""
 }

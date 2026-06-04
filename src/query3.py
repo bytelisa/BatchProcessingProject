@@ -87,12 +87,17 @@ def run_query3(spark, save_output=True, print_preview=True):
 
     t0 = time.time()
 
-    df = spark.read.parquet(PARQUET_PATH).select(
+    df = (spark.read.parquet(PARQUET_PATH)
+        .select(
         "OP_UNIQUE_CARRIER",
         "CRS_DEP_TIME",
         "DEP_DELAY",
         "CANCELLED",
+        )
     )
+
+    # Azione che forza l'esecuzione (per calcolo tempi)
+    df.count()
 
     timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
@@ -115,10 +120,11 @@ def run_query3(spark, save_output=True, print_preview=True):
             (F.col("CRS_DEP_TIME") / 100).cast(IntegerType())
         )
         .filter((F.col("HOUR") >= 0) & (F.col("HOUR") <= 23))
+        .cache() #il DataFrame viene riusato per due aggregazioni distinte
     )
 
-    # Cache: il DataFrame viene riusato per due aggregazioni distinte
-    df_filtered.cache()
+    # Azione che forza l'esecuzione per il calcolo dei tempi
+    df_filtered.count()
 
     timings["filtering_s"] = round(time.time() - t1, 3)
     print(f"    Filtering completato in {timings['filtering_s']:.2f}s")
@@ -145,9 +151,14 @@ def run_query3(spark, save_output=True, print_preview=True):
             F.percentile_approx("DEP_DELAY", 0.90, PERCENTILE_ACCURACY).alias("p90"),
         )
         .orderBy("airline", "hour")
+        .cache() # serve per l'output
     )
 
+    # Azione che forza l'esecuzione
     count_percentiles = result_percentiles.count()
+
+    # Non facciamo df_filtered.unpersist perché serve a minmax
+
 
     timings["computation_percentiles_s"] = round(time.time() - t2, 3)
     print(f"    Calcolo percentili completato in {timings['computation_percentiles_s']:.2f}s")
@@ -171,9 +182,14 @@ def run_query3(spark, save_output=True, print_preview=True):
             F.max("DEP_DELAY").alias("max_delay"),
         )
         .orderBy("airline")
+        .cache()
     )
 
+    # Azione che forza l'esecuzione
     count_minmax = result_minmax.count()
+
+    # Ora df_filtered non server più quindi può essere unpersistito
+    df_filtered.unpersist()
 
     timings["computation_minmax_s"] = round(time.time() - t3, 3)
     print(f"    Calcolo min/max completato in {timings['computation_minmax_s']:.2f}s")
@@ -205,7 +221,9 @@ def run_query3(spark, save_output=True, print_preview=True):
         timings["output_s"] = round(time.time() - t4, 3)
         print(f"    Output completato in {timings['output_s']:.2f}s")
 
-    df_filtered.unpersist()
+    # Liberiamo RAM appena possibile
+    result_percentiles.unpersist()
+    result_minmax.unpersist()
 
     timings["total_s"] = round(
         timings["loading_s"] +

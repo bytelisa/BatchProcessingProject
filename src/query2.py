@@ -56,20 +56,14 @@ DELAY_CAUSE_COLUMNS = [
 def build_all_airlines_stats(df):
     """
     Costruisce il primo output della Q2:
-    statistiche aggregate per ogni compagnia, considerando solo voli:
+    statistiche aggregate per ogni compagnia, ricevendo solo voli:
     - non cancellati
     - non deviati
     - con ARR_DELAY non nullo
     """
 
-    df_valid = (
-        df
-        .filter((F.col("CANCELLED") == 0) & (F.col("DIVERTED") == 0))
-        .filter(F.col("ARR_DELAY").isNotNull())
-    )
-
     all_airlines_stats = (
-        df_valid
+        df
         .groupBy(F.col("OP_UNIQUE_CARRIER").alias("carrier"))
         .agg(
             F.count(F.lit(1)).alias("num_flights"),
@@ -102,6 +96,8 @@ def build_top10_arrival_delay(all_airlines_stats):
     top 10 compagnie con almeno 500 voli validi, ordinate per ARR_DELAY medio
     decrescente.
     """
+
+    # Include filtering in quanto è una richiesta specfica della seconda parte della query
 
     top10_arrival_delay = (
         all_airlines_stats
@@ -153,8 +149,28 @@ def run_query2(spark, save_output=True, print_preview=True):
         )
     )
 
+    # Azione che forza l'esecuzione
+    df.count()
+
     timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.3f}s")
+
+    # ─────────────────────────────────────────────
+    # 2. Filterin/Preprocessing
+    # ─────────────────────────────────────────────
+    t1 = time.time()
+
+    df_filtered= (
+        df
+        .filter((F.col("CANCELLED") == 0) & (F.col("DIVERTED") == 0))
+        .filter(F.col("ARR_DELAY").isNotNull())
+    )
+
+    # Azione che forza l'esecuzione
+    df_filtered.count()
+
+    timings["filtering_s"] = round(time.time() - t1, 3)
+    print(f"    Filtering completato in {timings['filtering_s']:.3f}s")
 
     # ─────────────────────────────────────────────
     # 2. Aggregazione per tutte le compagnie
@@ -162,20 +178,21 @@ def run_query2(spark, save_output=True, print_preview=True):
 
     print("\n[2] Calcolo statistiche per tutte le compagnie...")
 
-    t1 = time.time()
+    t2 = time.time()
 
-    all_airlines_stats = build_all_airlines_stats(df)
+    all_airlines_stats = build_all_airlines_stats(df_filtered)
 
-    # Cache utile perché questo dataframe viene:
+    # Cache qui utile perché questo dataframe viene:
     # - contato
     # - mostrato
     # - usato per costruire la top 10
     # - eventualmente salvato
     all_airlines_stats = all_airlines_stats.cache()
 
+    # Azione che forza l'esecuzione
     all_count = all_airlines_stats.count()
 
-    timings["all_airlines_computation_s"] = round(time.time() - t1, 3)
+    timings["all_airlines_computation_s"] = round(time.time() - t2, 3)
 
     print(f"    Aggregazione completata in {timings['all_airlines_computation_s']:.3f}s")
     print(f"    Compagnie aggregate: {all_count}")
@@ -186,14 +203,15 @@ def run_query2(spark, save_output=True, print_preview=True):
 
     print("\n[3] Calcolo top 10 compagnie per ARR_DELAY medio...")
 
-    t2 = time.time()
+    t3 = time.time()
 
-    top10_arrival_delay = build_top10_arrival_delay(all_airlines_stats)
+    # Caching perché poi il risultato è riutilizzato nella fase di output
+    top10_arrival_delay = build_top10_arrival_delay(all_airlines_stats).cache()
 
     # Materializzo per misurare il tempo di calcolo della top 10
     top10_count = top10_arrival_delay.count()
 
-    timings["top10_computation_s"] = round(time.time() - t2, 3)
+    timings["top10_computation_s"] = round(time.time() - t3, 3)
 
     print(f"    Top 10 calcolata in {timings['top10_computation_s']:.3f}s")
     print(f"    Righe top 10: {top10_count}")
@@ -231,6 +249,7 @@ def run_query2(spark, save_output=True, print_preview=True):
 
     timings["total_s"] = round(
         timings["loading_s"]
+        + timings["filtering_s"]
         + timings["all_airlines_computation_s"]
         + timings["top10_computation_s"],
         3,
@@ -262,6 +281,7 @@ def main():
         print("TEMPI QUERY 2")
         print("=" * 72)
         print(f"  Loading:                    {timings['loading_s']:.3f}s")
+        print(f"  Filtering:                  {timings['filtering_s']:.3f}s")
         print(f"  All airlines computation:   {timings['all_airlines_computation_s']:.3f}s")
         print(f"  Top 10 computation:         {timings['top10_computation_s']:.3f}s")
         print(f"  Output:                     {timings.get('output_s', 0):.3f}s")
