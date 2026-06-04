@@ -145,6 +145,9 @@ def run_query1_rdd(spark, save_output=True, print_preview=True):
         .cache()
     )
 
+    # Azione necessaria a forzare l'esecuzione delle trasformazioni e acquisire il tempo corretto di loading
+    rdd_base.count()
+
     timings["loading_s"] = round(time.time() - t0, 3)
     print(f"    Loading completato in {timings['loading_s']:.2f}s")
 
