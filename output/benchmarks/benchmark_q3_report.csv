@@ -1,0 +1,12 @@
+query,impl,algorithm,phase,n,mean_s,std_s,median_s,min_s,max_s,note
+Q3,df,percentile_approx (Greenwald-Khanna),loading_s,15,0.1,0.043,0.085,0.071,0.239,computation_only
+Q3,df,percentile_approx (Greenwald-Khanna),filtering_s,15,0.054,0.026,0.047,0.04,0.147,computation_only
+Q3,df,percentile_approx (Greenwald-Khanna),computation_percentiles_s,15,0.885,0.169,0.847,0.743,1.417,computation_only
+Q3,df,percentile_approx (Greenwald-Khanna),computation_minmax_s,15,0.195,0.028,0.192,0.146,0.252,computation_only
+Q3,df,percentile_approx (Greenwald-Khanna),output_s,15,4.031,0.523,4.009,3.077,4.858,includes_output
+Q3,df,percentile_approx (Greenwald-Khanna),end_to_end_s,15,5.268,0.575,5.279,4.254,6.455,includes_output
+Q3,rdd,t-digest (delta=0.01),loading_s,15,0.204,0.156,0.123,0.106,0.589,computation_only
+Q3,rdd,t-digest (delta=0.01),computation_percentiles_s,15,41.274,61.415,18.784,17.291,256.596,computation_only
+Q3,rdd,t-digest (delta=0.01),computation_minmax_s,15,2.06,1.377,1.81,1.17,6.488,computation_only
+Q3,rdd,t-digest (delta=0.01),output_s,15,1.848,0.982,1.589,0.805,4.405,includes_output
+Q3,rdd,t-digest (delta=0.01),end_to_end_s,15,45.393,62.946,22.385,19.959,266.27,includes_output

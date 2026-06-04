@@ -1,0 +1,10 @@
+query,impl,phase,n,mean_s,std_s,median_s,min_s,max_s,note
+Q1,df,loading_s,15,0.078,0.011,0.073,0.067,0.096,computation_only
+Q1,df,filtering_s,15,0.008,0.001,0.008,0.006,0.011,computation_only
+Q1,df,computation_s,15,0.297,0.019,0.298,0.268,0.337,computation_only
+Q1,df,output_s,15,0.808,0.097,0.795,0.719,1.126,includes_output
+Q1,df,end_to_end_s,15,1.191,0.102,1.179,1.089,1.5,includes_output
+Q1,rdd,loading_s,15,0.082,0.007,0.081,0.077,0.104,computation_only
+Q1,rdd,computation_s,15,9.414,0.287,9.344,9.011,10.05,computation_only
+Q1,rdd,output_s,15,0.451,0.194,0.339,0.316,0.781,includes_output
+Q1,rdd,end_to_end_s,15,9.948,0.27,9.915,9.598,10.487,includes_output
